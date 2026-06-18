@@ -2,12 +2,18 @@
 // Holds the active segments in memory and, on every animation frame, sets the
 // video's playbackRate to match the timeline. Receives segments from the popup
 // via runtime messaging.
+//
+// YouTube is an SPA: clicking a different video in the same tab doesn't reload
+// the content script. We watch for that and drop the previous video's track so
+// it can't keep driving the new one (and so its ticks and badge don't linger).
 
 (function () {
   'use strict';
 
   var segments = [];   // [{start, rate}], sorted ascending by start
   var running = false; // rAF loop active?
+
+  var browserApi = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
 
   function getVideo() {
     return document.querySelector('video');
@@ -54,7 +60,42 @@
     if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
   }
 
-  var browserApi = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+  // ---- In-tab video changes -------------------------------------------------
+
+  function currentId() {
+    return (typeof SpeedTrackVideo !== 'undefined') ? SpeedTrackVideo.extractVideoId(location) : null;
+  }
+
+  var activeVideoId = currentId();
+
+  // Tell the background which video this tab is on, for the track-count badge.
+  function reportVideoId(id) {
+    if (browserApi && browserApi.runtime) {
+      browserApi.runtime.sendMessage({ type: 'videoId', videoId: id });
+    }
+  }
+
+  function handleVideoChange(newId) {
+    activeVideoId = newId;
+    // Leave an in-progress recording alone; its cues belong to that session.
+    if (!window.__speedTrackRecording) {
+      var hadTrack = segments.length > 0;
+      running = false;
+      segments = [];
+      // YouTube reuses the same <video> element, so a rate we set would carry
+      // over to the new video. Undo it (but only one we actually set).
+      var video = getVideo();
+      if (hadTrack && video) video.playbackRate = 1;
+      if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+    }
+    reportVideoId(newId);
+  }
+
+  function checkVideoChange() {
+    var id = currentId();
+    if (id !== activeVideoId) handleVideoChange(id);
+  }
+
   if (browserApi && browserApi.runtime && browserApi.runtime.onMessage) {
     browserApi.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       if (!msg) return;
@@ -75,13 +116,19 @@
         sendResponse({ ok: true });
         return true;
       }
+      if (msg.type === 'getPlaybackStatus') {
+        sendResponse({ applied: segments.length > 0 });
+        return true;
+      }
     });
-
-    // Report this page's video id so the background can badge how many saved
-    // tracks are available for it. Read once on load; SPA video changes are
-    // intentionally not handled (see the project's deferred-video-change note).
-    if (typeof SpeedTrackVideo !== 'undefined') {
-      browserApi.runtime.sendMessage({ type: 'videoId', videoId: SpeedTrackVideo.extractVideoId(location) });
-    }
   }
+
+  // Initial badge sync, then watch for in-tab navigation. yt-navigate-finish is
+  // YouTube's SPA "done navigating" event (snappy); the interval is a robust
+  // fallback that doesn't depend on YouTube internals. Both funnel through the
+  // id comparison, so firing twice is harmless.
+  reportVideoId(activeVideoId);
+  window.addEventListener('yt-navigate-finish', checkVideoChange);
+  document.addEventListener('yt-navigate-finish', checkVideoChange);
+  setInterval(checkVideoChange, 1000);
 })();

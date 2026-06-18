@@ -2,9 +2,9 @@
 //   - While authoring: a red recording indicator + live marker count.
 //   - Otherwise: a blue count of saved tracks available for the tab's video.
 //
-// Badges are per-tab. Video ids are reported by the content script on load and
-// cached per tab; in-page SPA video changes are intentionally not handled, like
-// the rest of the project (see the deferred-video-change note).
+// Badges are per-tab. The content script reports the tab's video id on load and
+// again whenever an in-tab SPA navigation swaps the video, so the cached id (and
+// the badge) follow along.
 
 (function () {
   'use strict';

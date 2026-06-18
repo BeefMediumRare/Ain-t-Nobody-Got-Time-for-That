@@ -41,6 +41,11 @@
     el.classList.toggle('hidden', !on);
   }
 
+  // The Stop/reset button only makes sense while a track is driving playback.
+  function setResetEnabled(on) {
+    resetBtn.disabled = !on;
+  }
+
   function activeTab() {
     return browserApi.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
       return tabs && tabs[0];
@@ -113,6 +118,7 @@
       return browserApi.tabs.sendMessage(tab.id, { type: 'applyTrack', segments: segments });
     }).then(function (resp) {
       if (resp && resp.ok) {
+        setResetEnabled(true);
         var note = resp.videoFound ? '' : ' (no <video> on page yet)';
         setStatus('Applied "' + track.title + '" — ' + resp.segmentCount + ' segment(s).' + note, 'ok');
       } else if (resp !== undefined) {
@@ -206,7 +212,10 @@
     activeTab().then(function (tab) {
       if (!tab) { setStatus('No active tab.', 'error'); return; }
       return browserApi.tabs.sendMessage(tab.id, { type: 'stopTrack' }).then(function (resp) {
-        if (resp && resp.ok) setStatus('Stopped. Playback speed reset to 1×.', 'ok');
+        if (resp && resp.ok) {
+          setResetEnabled(false);
+          setStatus('Stopped. Playback speed reset to 1×.', 'ok');
+        }
       });
     }).catch(function (err) {
       setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
@@ -243,6 +252,10 @@
 
   activeTab().then(function (tab) {
     if (!tab) return renderTracks();
+    // Reflect whether a track is currently driving playback (enables Stop).
+    browserApi.tabs.sendMessage(tab.id, { type: 'getPlaybackStatus' }).then(function (resp) {
+      setResetEnabled(!!(resp && resp.applied));
+    }).catch(function () { setResetEnabled(false); });
     return browserApi.tabs.sendMessage(tab.id, { type: 'getStatus' }).then(function (resp) {
       setRecording(!!(resp && resp.recording));
       if (resp && resp.videoId) videoId = resp.videoId;
