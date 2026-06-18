@@ -69,6 +69,21 @@
     return (typeof SpeedTrack !== 'undefined') ? SpeedTrack.formatTrack(cues) : '';
   }
 
+  function currentVideoId() {
+    return (typeof SpeedTrackVideo !== 'undefined') ? SpeedTrackVideo.extractVideoId(location) : null;
+  }
+
+  // What the popup needs to build/save a Track: the recorded cues, a formatted
+  // text version (legacy/preview), and the video this page is showing.
+  function statusResponse() {
+    return {
+      recording: recording,
+      track: currentTrack(),
+      cues: cues.slice(),
+      videoId: currentVideoId()
+    };
+  }
+
   function recordCue(code) {
     // First cue is the baseline -> anchor at 0:00; later ones use real time.
     var video = getVideo();
@@ -108,9 +123,10 @@
         startRecording();
         sendResponse({ ok: true });
       } else if (msg.type === 'stopRecording') {
-        sendResponse({ ok: true, track: stopRecording() });
+        stopRecording();
+        sendResponse(Object.assign({ ok: true }, statusResponse()));
       } else if (msg.type === 'getStatus') {
-        sendResponse({ recording: recording, track: currentTrack() });
+        sendResponse(statusResponse());
       }
     });
   }

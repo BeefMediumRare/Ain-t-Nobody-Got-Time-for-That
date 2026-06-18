@@ -45,20 +45,43 @@
     requestAnimationFrame(tick);
   }
 
+  // Stop driving playback: drop the track, reset to normal speed, clear the ticks.
+  function stop() {
+    running = false;
+    segments = [];
+    var video = getVideo();
+    if (video) video.playbackRate = 1;
+    if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+  }
+
   var browserApi = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
   if (browserApi && browserApi.runtime && browserApi.runtime.onMessage) {
     browserApi.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-      if (!msg || msg.type !== 'applyTrack') return;
-      segments = Array.isArray(msg.segments) ? msg.segments.slice() : [];
-      segments.sort(function (a, b) { return a.start - b.start; });
-      start();
-      // Show the track's ticks straight away (the rAF loop keeps them in sync).
-      if (window.SpeedTrackTimeline && !window.__speedTrackRecording) {
-        window.SpeedTrackTimeline.renderSegments(segments);
+      if (!msg) return;
+      if (msg.type === 'applyTrack') {
+        segments = Array.isArray(msg.segments) ? msg.segments.slice() : [];
+        segments.sort(function (a, b) { return a.start - b.start; });
+        start();
+        // Show the track's ticks straight away (the rAF loop keeps them in sync).
+        if (window.SpeedTrackTimeline && !window.__speedTrackRecording) {
+          window.SpeedTrackTimeline.renderSegments(segments);
+        }
+        var video = getVideo();
+        sendResponse({ ok: true, segmentCount: segments.length, videoFound: !!video });
+        return true;
       }
-      var video = getVideo();
-      sendResponse({ ok: true, segmentCount: segments.length, videoFound: !!video });
-      return true;
+      if (msg.type === 'stopTrack') {
+        stop();
+        sendResponse({ ok: true });
+        return true;
+      }
     });
+
+    // Report this page's video id so the background can badge how many saved
+    // tracks are available for it. Read once on load; SPA video changes are
+    // intentionally not handled (see the project's deferred-video-change note).
+    if (typeof SpeedTrackVideo !== 'undefined') {
+      browserApi.runtime.sendMessage({ type: 'videoId', videoId: SpeedTrackVideo.extractVideoId(location) });
+    }
   }
 })();

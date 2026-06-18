@@ -6,11 +6,37 @@
 </head>
 <body>
   <h1>Ain't Nobody Got Time for That</h1>
-  <button id="record" title="Toggle recording — Alt+Shift+R">Start recording (⌥⇧R)</button>
-  <textarea id="track" spellcheck="false" placeholder="# <timestamp> <code>  (1=normal 2=fast 3=faster 4=skip)&#10;0:00 2&#10;1:23 1&#10;1:31 2"></textarea>
-  <button id="apply">Apply to this video</button>
+
+  <button id="record">Start recording (⌥⇧R)</button>
+
+  <!-- Shown after a recording stops with cues waiting to be named. -->
+  <div id="save-form" class="section hidden">
+    <h2>Save recording</h2>
+    <input id="save-title" type="text" placeholder="Title">
+    <textarea id="save-desc" class="short" placeholder="Description (optional)"></textarea>
+    <button id="save-track">Save track</button>
+  </div>
+
+  <!-- Tracks matching the current video. -->
+  <div class="section">
+    <h2 id="tracks-heading">Tracks for this video</h2>
+    <ul id="track-list"></ul>
+    <div id="tracks-empty" class="muted hidden">No saved tracks for this video yet.</div>
+    <button id="reset">Stop &amp; reset to 1×</button>
+  </div>
+
+  <!-- Manual JSON input (dev convenience). -->
+  <details class="section">
+    <summary>Import track (JSON)</summary>
+    <textarea id="import-json" class="short" placeholder='{ "youtubeVideoId": "...", "title": "...", "cues": [ { "timestamp": "0:00", "speed": "2" } ] }'></textarea>
+    <button id="import-track">Import</button>
+  </details>
+
   <div id="status" class="status"></div>
+
   <script src="parser.js"></script>
+  <script src="video-id.js"></script>
+  <script src="storage.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -129,6 +129,101 @@
     return cues;
   }
 
+  // ---- Track documents (JSON, persisted, linked to a video) -----------------
+  //
+  // A Track is { schemaVersion, youtubeVideoId, title, description, cues }, where
+  // cues are { timestamp: "m:ss" string, speed: "1".."4" code string }. Speed is
+  // stored as a code (intent), resolved to a rate through the user's speed levels
+  // at playback time — so a shared track honors each viewer's configured speeds.
+
+  var SCHEMA_VERSION = 1;
+
+  // Turn a title into a filesystem-safe, prefix-scannable filename slug.
+  function slugifyTitle(title) {
+    return String(title == null ? '' : title)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'untitled';
+  }
+
+  // Build a Track document from recorder cues [{t, code}].
+  function cuesToTrack(cues, meta) {
+    meta = meta || {};
+    var sorted = (cues || []).slice().sort(function (a, b) { return a.t - b.t; });
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      youtubeVideoId: meta.videoId || '',
+      title: meta.title || '',
+      description: meta.description || '',
+      cues: sorted.map(function (cue) {
+        return { timestamp: formatTimestamp(cue.t), speed: String(cue.code) };
+      })
+    };
+  }
+
+  // Resolve a Track's cues into playback segments [{start, rate}] using a code->
+  // rate map (defaults to SPEED_LEVELS). Cues with an unknown code or unparseable
+  // timestamp are skipped. Sorted ascending by start.
+  function trackToSegments(track, speedLevels) {
+    var map = speedLevels || SPEED_LEVELS;
+    var cues = (track && track.cues) || [];
+    var segments = [];
+    for (var i = 0; i < cues.length; i++) {
+      var start = parseTimestamp(String(cues[i].timestamp));
+      var rate = map[cues[i].speed];
+      if (start === null || rate == null) continue;
+      segments.push({ start: start, rate: rate });
+    }
+    segments.sort(function (a, b) { return a.start - b.start; });
+    return segments;
+  }
+
+  // Validate (and normalize) an imported track. Accepts a parsed object or a JSON
+  // string. Returns { track, errors:[{message}] }; track is null when errors exist.
+  function validateTrack(input) {
+    var errors = [];
+    var obj = input;
+    if (typeof input === 'string') {
+      try { obj = JSON.parse(input); }
+      catch (e) { return { track: null, errors: [{ message: 'Not valid JSON: ' + e.message }] }; }
+    }
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      return { track: null, errors: [{ message: 'Expected a track object.' }] };
+    }
+    if (!obj.youtubeVideoId || typeof obj.youtubeVideoId !== 'string') {
+      errors.push({ message: 'Missing "youtubeVideoId".' });
+    }
+    if (typeof obj.title !== 'string' || !obj.title.trim()) {
+      errors.push({ message: 'Missing "title".' });
+    }
+    if (!Array.isArray(obj.cues)) {
+      errors.push({ message: 'Missing "cues" array.' });
+    } else {
+      for (var i = 0; i < obj.cues.length; i++) {
+        var cue = obj.cues[i];
+        if (!cue || parseTimestamp(String(cue.timestamp)) === null) {
+          errors.push({ message: 'Cue ' + (i + 1) + ': invalid timestamp.' });
+        }
+        if (!cue || !Object.prototype.hasOwnProperty.call(SPEED_LEVELS, cue.speed)) {
+          errors.push({ message: 'Cue ' + (i + 1) + ': unknown speed code "' + (cue && cue.speed) + '".' });
+        }
+      }
+    }
+    if (errors.length) return { track: null, errors: errors };
+    return {
+      track: {
+        schemaVersion: SCHEMA_VERSION,
+        youtubeVideoId: obj.youtubeVideoId,
+        title: obj.title.trim(),
+        description: typeof obj.description === 'string' ? obj.description : '',
+        cues: obj.cues.map(function (c) {
+          return { timestamp: String(c.timestamp), speed: String(c.speed) };
+        })
+      },
+      errors: []
+    };
+  }
+
   // Rate active at time t: the last segment whose start <= t. null if none.
   function rateAt(segments, t) {
     var rate = null;
@@ -146,6 +241,11 @@
     formatTimestamp: formatTimestamp,
     formatTrack: formatTrack,
     mergeCue: mergeCue,
+    slugifyTitle: slugifyTitle,
+    cuesToTrack: cuesToTrack,
+    trackToSegments: trackToSegments,
+    validateTrack: validateTrack,
+    SCHEMA_VERSION: SCHEMA_VERSION,
     SPEED_LEVELS: SPEED_LEVELS
   };
 

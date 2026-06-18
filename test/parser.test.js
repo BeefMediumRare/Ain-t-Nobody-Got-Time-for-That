@@ -1,5 +1,6 @@
 // Minimal test runner — `node test/parser.test.js`. Exits non-zero on failure.
-const { parseTrack, rateAt, parseTimestamp, formatTimestamp, formatTrack, mergeCue, SPEED_LEVELS } = require('../src/parser.js');
+const { parseTrack, rateAt, parseTimestamp, formatTimestamp, formatTrack, mergeCue,
+  slugifyTitle, cuesToTrack, trackToSegments, validateTrack, SCHEMA_VERSION, SPEED_LEVELS } = require('../src/parser.js');
 
 let failed = 0;
 function eq(label, got, want) {
@@ -91,6 +92,64 @@ eq('edit to preceding drops cue',
 eq('baseline never dropped',
   mergeCue([{ t: 0, code: 1 }, { t: 60, code: 2 }], 0, 2, 2),
   [{ t: 0, code: 2 }, { t: 60, code: 2 }]);
+
+// ---- Track documents ------------------------------------------------------
+
+// slugifyTitle: lowercase, non-alphanumerics collapse to '-', trimmed
+eq('slug basic', slugifyTitle('My Track'), 'my-track');
+eq('slug punctuation', slugifyTitle('Skip the!! intro?'), 'skip-the-intro');
+eq('slug trims edges', slugifyTitle('  --Hi--  '), 'hi');
+eq('slug empty', slugifyTitle(''), 'untitled');
+
+// cuesToTrack: recorder cues -> JSON document (sorted, timestamps + code strings)
+eq('cuesToTrack', cuesToTrack([{ t: 83, code: 1 }, { t: 0, code: 2 }],
+  { videoId: 'abc12345', title: 'T', description: 'D' }),
+  {
+    schemaVersion: SCHEMA_VERSION,
+    youtubeVideoId: 'abc12345',
+    title: 'T',
+    description: 'D',
+    cues: [{ timestamp: '0:00', speed: '2' }, { timestamp: '1:23', speed: '1' }]
+  });
+
+// trackToSegments: resolve codes through the speed map (default = SPEED_LEVELS)
+const trk = { youtubeVideoId: 'x', title: 't', cues: [
+  { timestamp: '1:23', speed: '1' }, { timestamp: '0:00', speed: '2' }
+] };
+eq('trackToSegments default', trackToSegments(trk),
+  [{ start: 0, rate: 2 }, { start: 83, rate: 1 }]);
+// custom prefs change the resolved rate
+eq('trackToSegments custom prefs', trackToSegments(trk, { 1: 1, 2: 1.5 }),
+  [{ start: 0, rate: 1.5 }, { start: 83, rate: 1 }]);
+// unknown code / bad timestamp are skipped
+eq('trackToSegments skips bad cues',
+  trackToSegments({ cues: [{ timestamp: '0:00', speed: '9' }, { timestamp: 'nope', speed: '2' }, { timestamp: '0:30', speed: '2' }] }),
+  [{ start: 30, rate: 2 }]);
+
+// round-trip: cuesToTrack -> trackToSegments matches parseTrack(formatTrack(...))
+const cuesRt = [{ t: 0, code: 2 }, { t: 83, code: 1 }, { t: 91, code: 3 }];
+eq('track round-trip segments',
+  trackToSegments(cuesToTrack(cuesRt, { videoId: 'v', title: 't' })),
+  parseTrack(formatTrack(cuesRt)).segments);
+
+// validateTrack: a good object normalizes and reports no errors
+const okv = validateTrack({ youtubeVideoId: 'v', title: '  Hi  ', cues: [{ timestamp: '0:00', speed: '2' }] });
+eq('validate ok no errors', okv.errors, []);
+eq('validate trims title', okv.track.title, 'Hi');
+eq('validate fills description', okv.track.description, '');
+eq('validate stamps schema', okv.track.schemaVersion, SCHEMA_VERSION);
+
+// validateTrack: accepts a JSON string
+eq('validate from json string',
+  validateTrack('{"youtubeVideoId":"v","title":"t","cues":[{"timestamp":"0:00","speed":"1"}]}').errors, []);
+eq('validate bad json', validateTrack('{not json').errors.length, 1);
+
+// validateTrack: missing/invalid fields are reported, track is null
+eq('validate missing id+title', validateTrack({ cues: [] }).errors.length, 2);
+eq('validate missing id+title null', validateTrack({ cues: [] }).track, null);
+eq('validate bad cue ts', validateTrack({ youtubeVideoId: 'v', title: 't', cues: [{ timestamp: 'x', speed: '1' }] }).errors.length, 1);
+eq('validate unknown code', validateTrack({ youtubeVideoId: 'v', title: 't', cues: [{ timestamp: '0:00', speed: '7' }] }).errors.length, 1);
+eq('validate missing cues array', validateTrack({ youtubeVideoId: 'v', title: 't' }).errors.length, 1);
 
 console.log(failed ? `\n${failed} failed` : '\nAll passed');
 process.exit(failed ? 1 : 0);

@@ -9,18 +9,18 @@
       "strict_min_version": "115.0"
     }
   },
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "storage"],
   "action": {
     "default_title": "Ain't Nobody Got Time for That",
     "default_popup": "src/popup.html"
   },
   "background": {
-    "scripts": ["src/background.js"]
+    "scripts": ["src/storage.js", "src/background.js"]
   },
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["src/parser.js", "src/content.js", "src/timeline.js", "src/author.js"],
+      "js": ["src/parser.js", "src/video-id.js", "src/content.js", "src/timeline.js", "src/author.js"],
       "run_at": "document_idle"
     }
   ]
