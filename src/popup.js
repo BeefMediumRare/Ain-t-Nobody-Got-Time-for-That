@@ -31,6 +31,7 @@
   var videoId = null;
   var speedLevels = null;     // code->rate prefs, loaded once on open
   var pendingCues = null;     // cues from a just-ended recording, awaiting a title
+  var currentTracks = [];     // [{ track, writable }] for the current video
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg;
@@ -69,18 +70,46 @@
   function renderTracks() {
     listEl.textContent = '';
     if (!videoId) {
+      currentTracks = [];
       headingEl.textContent = 'Open a YouTube video to see its tracks.';
       show(emptyEl, false);
+      refreshSaveButton();
       return Promise.resolve();
     }
     headingEl.textContent = 'Tracks for this video';
     return SpeedTrackStore.getTracksForVideo(videoId).then(function (tracks) {
-      show(emptyEl, tracks.length === 0);
-      tracks.forEach(function (track) { listEl.appendChild(renderTrackItem(track)); });
+      // Local-storage tracks are writable. Read-only tracks pulled from a repo
+      // (a future source) would render with writable=false: Apply/Download only.
+      currentTracks = tracks.map(function (t) { return { track: t, writable: true }; });
+      show(emptyEl, currentTracks.length === 0);
+      currentTracks.forEach(function (e) { listEl.appendChild(renderTrackItem(e.track, e.writable)); });
+      refreshSaveButton();
     });
   }
 
-  function renderTrackItem(track) {
+  // The existing track (if any) for the current video matching a title.
+  function findTrackEntry(title) {
+    for (var i = 0; i < currentTracks.length; i++) {
+      if (currentTracks[i].track.title === title) return currentTracks[i];
+    }
+    return null;
+  }
+
+  // Saving with an existing title overwrites it (a new title makes a new track),
+  // so the button says so. A read-only (repo) track can't be written over, so
+  // saving under its title is blocked — change the title to keep a local copy.
+  function refreshSaveButton() {
+    var match = findTrackEntry(titleInput.value.trim());
+    if (match && !match.writable) {
+      saveBtn.textContent = 'Cannot overwrite a read-only track';
+      saveBtn.disabled = true;
+    } else {
+      saveBtn.textContent = match ? 'Overwrite track' : 'Save track';
+      saveBtn.disabled = false;
+    }
+  }
+
+  function renderTrackItem(track, writable) {
     var li = document.createElement('li');
     li.className = 'track';
 
@@ -99,10 +128,13 @@
     var actions = document.createElement('div');
     actions.className = 'track-actions';
     actions.appendChild(smallButton('Apply', function () { applyTrack(track); }));
+    if (writable) actions.appendChild(smallButton('Edit', function () { editTrack(track); }));
     actions.appendChild(smallButton('Download', function () { downloadTrack(track); }));
-    var del = smallButton('Delete', function () { deleteTrack(track); });
-    del.className = 'danger';
-    actions.appendChild(del);
+    if (writable) {
+      var del = smallButton('Delete', function () { deleteTrack(track); });
+      del.className = 'danger';
+      actions.appendChild(del);
+    }
     li.appendChild(actions);
 
     return li;
@@ -150,6 +182,28 @@
     });
   }
 
+  // Reopen a saved track as a recording, seeded with its cues. Ending the session
+  // brings back the save dialog prefilled with the original title/description:
+  // keep the title to overwrite, change it to save as a separate track. Editing
+  // only the title/description (without touching cues) is a valid use.
+  function editTrack(track) {
+    var cues = SpeedTrack.trackToCues(track);
+    activeTab().then(function (tab) {
+      if (!tab) { setStatus('No active tab.', 'error'); return; }
+      return browserApi.tabs.sendMessage(tab.id, {
+        type: 'editTrack', cues: cues, title: track.title, description: track.description
+      }).then(function (resp) {
+        if (resp && resp.ok) {
+          setRecording(true);
+          show(saveForm, false);
+          setStatus('Editing "' + track.title + '". Adjust cues if you like, then End recording.', 'ok');
+        }
+      });
+    }).catch(function (err) {
+      setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
+    });
+  }
+
   // ---- Recording / saving ---------------------------------------------------
 
   recordBtn.addEventListener('click', function () {
@@ -165,26 +219,30 @@
       return browserApi.tabs.sendMessage(tab.id, { type: 'stopRecording' }).then(function (resp) {
         setRecording(false);
         if (resp && resp.videoId) videoId = resp.videoId;
-        offerSave(resp && resp.cues);
+        offerSave(resp && resp.cues, resp && resp.edit);
       });
     }).catch(function (err) {
       setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
     });
   });
 
-  // Show the title/description form for a fresh set of recorded cues.
-  function offerSave(cues) {
+  // Show the title/description form for recorded cues. When editing, meta carries
+  // the original title/description to prefill (keep title = overwrite).
+  function offerSave(cues, meta) {
     pendingCues = (cues && cues.length) ? cues : null;
     if (!pendingCues) {
       show(saveForm, false);
       setStatus('Recording ended (nothing recorded).', 'ok');
       return;
     }
-    titleInput.value = '';
-    descInput.value = '';
+    titleInput.value = (meta && meta.title) || '';
+    descInput.value = (meta && meta.description) || '';
     show(saveForm, true);
+    refreshSaveButton();
     titleInput.focus();
-    setStatus('Recording ended. Name it and Save.', 'ok');
+    setStatus(meta && meta.title
+      ? 'Editing "' + meta.title + '". Keep the title to overwrite, or change it to save a new track.'
+      : 'Recording ended. Name it and Save.', 'ok');
   }
 
   saveBtn.addEventListener('click', function () {
@@ -193,6 +251,13 @@
     if (!videoId) { setStatus('No video id for this page — open the video first.', 'error'); return; }
     if (!pendingCues || !pendingCues.length) { setStatus('Nothing recorded to save.', 'error'); return; }
 
+    var match = findTrackEntry(title);
+    if (match && !match.writable) {
+      setStatus('"' + title + '" is read-only — change the title to save a local copy.', 'error');
+      titleInput.focus();
+      return;
+    }
+
     var track = SpeedTrack.cuesToTrack(pendingCues, {
       videoId: videoId, title: title, description: descInput.value.trim()
     });
@@ -200,6 +265,10 @@
       pendingCues = null;
       show(saveForm, false);
       setStatus('Saved "' + title + '". Apply it, or Download to commit to a repo.', 'ok');
+      // Forget the take on the page so reopening the popup won't re-offer to save.
+      activeTab().then(function (tab) {
+        if (tab) browserApi.tabs.sendMessage(tab.id, { type: 'clearRecording' }).catch(function () {});
+      });
       return renderTracks();
     }).catch(function (err) {
       setStatus('Could not save: ' + err.message, 'error');
@@ -223,6 +292,8 @@
   });
 
   // ---- Import ---------------------------------------------------------------
+
+  titleInput.addEventListener('input', refreshSaveButton);
 
   importBtn.addEventListener('click', function () {
     var result = SpeedTrack.validateTrack(importArea.value);
@@ -259,9 +330,11 @@
     return browserApi.tabs.sendMessage(tab.id, { type: 'getStatus' }).then(function (resp) {
       setRecording(!!(resp && resp.recording));
       if (resp && resp.videoId) videoId = resp.videoId;
-      // A session ended via the keyboard shortcut leaves cues waiting; offer to save.
-      if (resp && !resp.recording && resp.cues && resp.cues.length) offerSave(resp.cues);
-      return renderTracks();
+      // Render first so the save form's Overwrite/Save label knows the existing
+      // tracks; a session ended via the keyboard leaves cues waiting to save.
+      return renderTracks().then(function () {
+        if (resp && !resp.recording && resp.cues && resp.cues.length) offerSave(resp.cues, resp.edit);
+      });
     });
   }).catch(function () {
     // Not a YouTube tab (or content script not present): no video, just render empty.

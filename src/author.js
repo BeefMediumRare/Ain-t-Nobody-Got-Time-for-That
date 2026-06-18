@@ -29,6 +29,7 @@
 
   var recording = false;
   var cues = [];             // [{ t, code }]
+  var editMeta = null;       // { title, description } when re-recording a saved track
 
   function getVideo() {
     return document.querySelector('video');
@@ -47,12 +48,19 @@
     if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
   }
 
-  function startRecording() {
+  // Start a session. seedCues/meta are set when editing a saved track: the
+  // recorder opens pre-loaded with its cues and remembers its title/description
+  // so the save dialog can prefill them.
+  function startRecording(seedCues, meta) {
     recording = true;
-    cues = [];
+    cues = Array.isArray(seedCues)
+      ? seedCues.map(function (c) { return { t: c.t, code: c.code }; })
+      : [];
+    editMeta = meta || null;
     window.__speedTrackRecording = true;
     clearTicks();
     if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.pin();
+    renderTicks(); // show the seeded cues (no-op when starting empty)
     sendBadge();
   }
 
@@ -74,13 +82,15 @@
   }
 
   // What the popup needs to build/save a Track: the recorded cues, a formatted
-  // text version (legacy/preview), and the video this page is showing.
+  // text version (legacy/preview), the video this page is showing, and (when
+  // editing) the original title/description to prefill the save dialog.
   function statusResponse() {
     return {
       recording: recording,
       track: currentTrack(),
       cues: cues.slice(),
-      videoId: currentVideoId()
+      videoId: currentVideoId(),
+      edit: editMeta
     };
   }
 
@@ -129,11 +139,20 @@
       if (msg.type === 'startRecording') {
         startRecording();
         sendResponse({ ok: true });
+      } else if (msg.type === 'editTrack') {
+        // Reopen a saved track for editing: seed its cues and remember its meta.
+        startRecording(msg.cues, { title: msg.title, description: msg.description });
+        sendResponse({ ok: true });
       } else if (msg.type === 'stopRecording') {
         stopRecording();
         sendResponse(Object.assign({ ok: true }, statusResponse()));
       } else if (msg.type === 'getStatus') {
         sendResponse(statusResponse());
+      } else if (msg.type === 'clearRecording') {
+        // The popup saved the take; forget it so reopening won't re-offer to save.
+        cues = [];
+        editMeta = null;
+        sendResponse({ ok: true });
       }
     });
   }

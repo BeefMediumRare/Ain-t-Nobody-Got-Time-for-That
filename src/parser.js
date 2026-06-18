@@ -178,6 +178,21 @@
     return segments;
   }
 
+  // Turn a Track's cues back into recorder cues [{t, code}] so a saved track can
+  // be reopened for editing. Inverse of cuesToTrack; bad cues are skipped.
+  function trackToCues(track) {
+    var cues = (track && track.cues) || [];
+    var out = [];
+    for (var i = 0; i < cues.length; i++) {
+      var t = parseTimestamp(String(cues[i].timestamp));
+      var code = Number(cues[i].speed);
+      if (t === null || !Object.prototype.hasOwnProperty.call(SPEED_LEVELS, code)) continue;
+      out.push({ t: t, code: code });
+    }
+    out.sort(function (a, b) { return a.t - b.t; });
+    return out;
+  }
+
   // Validate (and normalize) an imported track. Accepts a parsed object or a JSON
   // string. Returns { track, errors:[{message}] }; track is null when errors exist.
   function validateTrack(input) {
@@ -243,6 +258,7 @@
     mergeCue: mergeCue,
     slugifyTitle: slugifyTitle,
     cuesToTrack: cuesToTrack,
+    trackToCues: trackToCues,
     trackToSegments: trackToSegments,
     validateTrack: validateTrack,
     SCHEMA_VERSION: SCHEMA_VERSION,

@@ -1,6 +1,6 @@
 // Minimal test runner — `node test/parser.test.js`. Exits non-zero on failure.
 const { parseTrack, rateAt, parseTimestamp, formatTimestamp, formatTrack, mergeCue,
-  slugifyTitle, cuesToTrack, trackToSegments, validateTrack, SCHEMA_VERSION, SPEED_LEVELS } = require('../src/parser.js');
+  slugifyTitle, cuesToTrack, trackToCues, trackToSegments, validateTrack, SCHEMA_VERSION, SPEED_LEVELS } = require('../src/parser.js');
 
 let failed = 0;
 function eq(label, got, want) {
@@ -125,6 +125,18 @@ eq('trackToSegments custom prefs', trackToSegments(trk, { 1: 1, 2: 1.5 }),
 eq('trackToSegments skips bad cues',
   trackToSegments({ cues: [{ timestamp: '0:00', speed: '9' }, { timestamp: 'nope', speed: '2' }, { timestamp: '0:30', speed: '2' }] }),
   [{ start: 30, rate: 2 }]);
+
+// trackToCues: Track document -> recorder cues [{t, code}] (inverse of cuesToTrack)
+eq('trackToCues', trackToCues({ cues: [
+  { timestamp: '1:23', speed: '1' }, { timestamp: '0:00', speed: '2' }
+] }), [{ t: 0, code: 2 }, { t: 83, code: 1 }]);
+// skips bad cues
+eq('trackToCues skips bad', trackToCues({ cues: [
+  { timestamp: 'x', speed: '2' }, { timestamp: '0:00', speed: '9' }, { timestamp: '0:30', speed: '1' }
+] }), [{ t: 30, code: 1 }]);
+// round-trips with cuesToTrack
+const cuesEdit = [{ t: 0, code: 2 }, { t: 83, code: 1 }, { t: 91, code: 4 }];
+eq('cues round-trip via track', trackToCues(cuesToTrack(cuesEdit, { videoId: 'v', title: 't' })), cuesEdit);
 
 // round-trip: cuesToTrack -> trackToSegments matches parseTrack(formatTrack(...))
 const cuesRt = [{ t: 0, code: 2 }, { t: 83, code: 1 }, { t: 91, code: 3 }];

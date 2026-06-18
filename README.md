@@ -28,6 +28,8 @@ Each entry is a **cue** (a timestamp plus a speed). To fix a cue, press a digit 
 
 **Deleting a cue:** a cue that matches the speed of the cue right before it does nothing, so it isn't created when adding or is removed when editing. To delete a cue, set it to the same speed as the segment before it. Normal playback keys (space, `k`, `j`, `l`, arrows) keep working throughout.
 
+**Editing a saved track:** hit **Edit** on a track to reopen it as a recording, seeded with its cues. Adjust whatever you want (or nothing — you might only be changing the title or description), then end the session to bring back the save dialog. Keep the title to overwrite the track, or change it to save a separate one. Tracks from a repository are read-only, so only local ones can be edited or deleted.
+
 ## Track format
 
 A track is a JSON document linked to a YouTube video by id. A video can have several tracks; they're matched by `youtubeVideoId`. Each cue's `speed` is a **code** (`"1"`–`"4"`), not a fixed rate — the code→rate mapping is a per-user preference, so a shared track plays at whatever speeds the viewer has configured.
