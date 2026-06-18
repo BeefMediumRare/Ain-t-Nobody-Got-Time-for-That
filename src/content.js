@@ -26,13 +26,15 @@
   function tick() {
     if (!running) return;
     var video = getVideo();
-    // Don't fight the recorder: leave playback alone while authoring.
+    // Don't fight the recorder: leave playback (and its ticks) alone while authoring.
     if (video && segments.length && !window.__speedTrackRecording) {
       var want = rateAt(video.currentTime);
       // null => before the first entry: leave the rate untouched.
       if (want !== null && Math.abs(video.playbackRate - want) > 1e-3) {
         video.playbackRate = want;
       }
+      // Keep the ticks on the bar; cheap no-op unless YouTube re-rendered it.
+      if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.refreshSegments(segments);
     }
     requestAnimationFrame(tick);
   }
@@ -50,6 +52,10 @@
       segments = Array.isArray(msg.segments) ? msg.segments.slice() : [];
       segments.sort(function (a, b) { return a.start - b.start; });
       start();
+      // Show the track's ticks straight away (the rAF loop keeps them in sync).
+      if (window.SpeedTrackTimeline && !window.__speedTrackRecording) {
+        window.SpeedTrackTimeline.renderSegments(segments);
+      }
       var video = getVideo();
       sendResponse({ ok: true, segmentCount: segments.length, videoFound: !!video });
       return true;

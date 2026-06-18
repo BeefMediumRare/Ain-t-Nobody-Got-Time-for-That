@@ -1,13 +1,15 @@
-// timeline.js — recording-aid overlay (content script).
+// timeline.js — tick overlay on YouTube's progress bar (content script).
 //
-// While a recording session is active, draws a colored tick on YouTube's progress
-// bar for each recorded cue, positioned at the cue's timestamp and color-coded by
-// speed. This is purely live authoring feedback: author.js calls render(cues) on
-// every cue change and clear() when the session ends. Ticks are never shown during
-// normal playback.
+// Draws a colored tick on the scrubber for each speed change, positioned by
+// timestamp and colored by speed. Two callers:
+//   - author.js (recording): render(cues) on every cue change, clear() at the end.
+//     Colored by cue code. Pins the controls visible so ticks don't auto-hide.
+//   - content.js (playback): renderSegments(segments) when a track is applied, then
+//     refreshSegments(segments) from its rAF loop to redraw if YouTube re-renders
+//     the bar. Colored by rate. Controls are NOT pinned — ticks ride the bar's
+//     normal show/hide.
 //
-// We lean on the session-scoped assumptions (no resize, video unchanged) so positions
-// are percentage-based against video.duration and the bar is found lazily per render.
+// Positions are percentage-based against video.duration, so ticks survive a resize.
 
 (function () {
   'use strict';
@@ -25,6 +27,18 @@
       case 4: return '#c62828'; // red
       default: return '#9e9e9e';
     }
+  }
+
+  function levels() {
+    return (typeof SpeedTrack !== 'undefined') ? SpeedTrack.SPEED_LEVELS : null;
+  }
+
+  // Playback gives us a rate, not a code. Reverse-map through SPEED_LEVELS (rates
+  // are distinct) so the same colors mean the same speeds as while recording.
+  function rateColor(rate) {
+    var map = levels();
+    if (map) for (var k in map) if (map[k] === rate) return codeColor(Number(k));
+    return '#9e9e9e';
   }
 
   // The overlay container, lazily (re)created inside the progress bar. Returns null
@@ -47,23 +61,21 @@
     return overlay;
   }
 
-  // Draw all ticks from the full current cue list. Idempotent: clears and redraws.
-  function render(cues) {
+  // Draw a normalized tick list [{ t, color, title }]. Idempotent: clears + redraws.
+  function paint(items) {
     var overlay = ensureOverlay();
     if (!overlay) return;
     overlay.textContent = '';
 
-    if (!cues || !cues.length) return;
+    if (!items || !items.length) return;
 
     var video = document.querySelector('video');
     var duration = video && video.duration;
     if (!duration) return; // NaN/0 right after load — nothing sensible to position yet
 
-    var levels = (typeof SpeedTrack !== 'undefined') ? SpeedTrack.SPEED_LEVELS : null;
-
-    for (var i = 0; i < cues.length; i++) {
-      var cue = cues[i];
-      var pct = Math.max(0, Math.min(100, (cue.t / duration) * 100));
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var pct = Math.max(0, Math.min(100, (item.t / duration) * 100));
 
       // Protrude above/below the thin progress bar so ticks are easy to see and
       // their colors are distinguishable; a dark outline keeps them visible against
@@ -72,10 +84,37 @@
       tick.style.cssText =
         'position:absolute;top:-7px;height:18px;width:3px;margin-left:-1.5px;border-radius:1px;' +
         'pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,0.5);' +
-        'left:' + pct + '%;background:' + codeColor(cue.code) + ';';
-      if (levels && levels[cue.code] != null) tick.title = levels[cue.code] + 'x';
+        'left:' + pct + '%;background:' + item.color + ';';
+      if (item.title) tick.title = item.title;
       overlay.appendChild(tick);
     }
+  }
+
+  // Recording: cues are { t, code }, colored by code.
+  function render(cues) {
+    var map = levels();
+    paint((cues || []).map(function (cue) {
+      return {
+        t: cue.t,
+        color: codeColor(cue.code),
+        title: (map && map[cue.code] != null) ? map[cue.code] + 'x' : ''
+      };
+    }));
+  }
+
+  // Playback: segments are { start, rate }, colored by rate.
+  function renderSegments(segments) {
+    paint((segments || []).map(function (seg) {
+      return { t: seg.start, color: rateColor(seg.rate), title: seg.rate + 'x' };
+    }));
+  }
+
+  // Cheap to call every frame: only redraws if our overlay vanished (YouTube
+  // re-rendered the bar) or hasn't been drawn yet (e.g. duration wasn't ready).
+  function refreshSegments(segments) {
+    var overlay = document.getElementById(OVERLAY_ID);
+    if (overlay && overlay.isConnected && overlay.firstChild) return;
+    renderSegments(segments);
   }
 
   // Remove the overlay entirely so nothing lingers after the session.
@@ -105,5 +144,12 @@
     if (player) player.classList.remove(PIN_CLASS);
   }
 
-  window.SpeedTrackTimeline = { render: render, clear: clear, pin: pin, unpin: unpin };
+  window.SpeedTrackTimeline = {
+    render: render,
+    renderSegments: renderSegments,
+    refreshSegments: refreshSegments,
+    clear: clear,
+    pin: pin,
+    unpin: unpin
+  };
 })();
