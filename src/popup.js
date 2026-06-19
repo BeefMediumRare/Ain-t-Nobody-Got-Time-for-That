@@ -23,11 +23,6 @@
   var emptyEl = document.getElementById('tracks-empty');
   var noticesEl = document.getElementById('source-notices');
 
-  var importArea = document.getElementById('import-json');
-  var importBtn = document.getElementById('import-track');
-
-  var resetBtn = document.getElementById('reset');
-
   var refreshBtn = document.getElementById('refresh-repos');
   var optionsBtn = document.getElementById('open-options');
 
@@ -48,11 +43,6 @@
     el.classList.toggle('hidden', !on);
   }
 
-  // The Stop/reset button only makes sense while a track is driving playback.
-  function setResetEnabled(on) {
-    resetBtn.disabled = !on;
-  }
-
   function activeTab() {
     return browserApi.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
       return tabs && tabs[0];
@@ -61,7 +51,11 @@
 
   function setRecording(on) {
     recording = on;
-    recordBtn.textContent = (on ? 'End recording' : 'Start recording') + ' (⌥⇧R)';
+    // The dot and shortcut chip are static markup; only swap the label and toggle
+    // the pulsing-dot state.
+    recordBtn.classList.toggle('recording', on);
+    var label = recordBtn.querySelector('.rec-label');
+    if (label) label.textContent = on ? 'End recording' : 'Start recording';
   }
 
   function smallButton(label, onClick) {
@@ -181,7 +175,13 @@
 
     var actions = document.createElement('div');
     actions.className = 'track-actions';
-    actions.appendChild(smallButton('Apply', function () { applyTrack(track); }));
+    // The live track's primary button stops playback; every other row's applies.
+    // That keeps one transport control, always sitting on the track it affects.
+    var primary = isActive
+      ? smallButton('Stop', function () { stopTrack(); })
+      : smallButton('Apply', function () { applyTrack(track); });
+    primary.className = 'primary';
+    actions.appendChild(primary);
     if (writable) actions.appendChild(smallButton('Edit', function () { editTrack(track); }));
     // Clone forks any track into a new, editable local copy. For repo tracks it's
     // the only way to make them editable; for local tracks it's how you fork a
@@ -208,7 +208,6 @@
       return browserApi.tabs.sendMessage(tab.id, { type: 'applyTrack', segments: segments, id: track.id });
     }).then(function (resp) {
       if (resp && resp.ok) {
-        setResetEnabled(true);
         appliedId = track.id;
         renderTracks();
         var note = resp.videoFound ? '' : ' (no <video> on page yet)';
@@ -216,6 +215,23 @@
       } else if (resp !== undefined) {
         setStatus('Applied, but no response from page.', 'ok');
       }
+    }).catch(function (err) {
+      setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
+    });
+  }
+
+  // Stop the live track and reset the page to 1×. Invoked from the active row's
+  // primary button (which reads "Stop" while that track is playing).
+  function stopTrack() {
+    activeTab().then(function (tab) {
+      if (!tab) { setStatus('No active tab.', 'error'); return; }
+      return browserApi.tabs.sendMessage(tab.id, { type: 'stopTrack' }).then(function (resp) {
+        if (resp && resp.ok) {
+          appliedId = null;
+          renderTracks();
+          setStatus('Stopped. Playback speed reset to 1×.', 'ok');
+        }
+      });
     }).catch(function (err) {
       setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
     });
@@ -361,48 +377,7 @@
     });
   });
 
-  // ---- Stop / reset ---------------------------------------------------------
-
-  resetBtn.addEventListener('click', function () {
-    activeTab().then(function (tab) {
-      if (!tab) { setStatus('No active tab.', 'error'); return; }
-      return browserApi.tabs.sendMessage(tab.id, { type: 'stopTrack' }).then(function (resp) {
-        if (resp && resp.ok) {
-          setResetEnabled(false);
-          appliedId = null;
-          renderTracks();
-          setStatus('Stopped. Playback speed reset to 1×.', 'ok');
-        }
-      });
-    }).catch(function (err) {
-      setStatus('Could not reach the page. Is this a YouTube tab?\n' + err.message, 'error');
-    });
-  });
-
-  // ---- Import ---------------------------------------------------------------
-
   titleInput.addEventListener('input', refreshSaveButton);
-
-  importBtn.addEventListener('click', function () {
-    var result = SpeedTrack.validateTrack(importArea.value);
-    if (result.errors.length) {
-      setStatus(result.errors.map(function (e) { return e.message; }).join('\n'), 'error');
-      return;
-    }
-    SpeedTrackStore.saveTrack(result.track).then(function () {
-      importArea.value = '';
-      var t = result.track;
-      if (t.youtubeVideoId === videoId) {
-        setStatus('Imported "' + t.title + '".', 'ok');
-      } else {
-        setStatus('Imported "' + t.title + '" for video ' + t.youtubeVideoId +
-          ' (not the one open now).', 'ok');
-      }
-      return renderTracks();
-    }).catch(function (err) {
-      setStatus('Could not import: ' + err.message, 'error');
-    });
-  });
 
   // ---- Repositories ---------------------------------------------------------
 
@@ -439,12 +414,11 @@
 
   activeTab().then(function (tab) {
     if (!tab) return renderTracks();
-    // Reflect whether a track is currently driving playback (enables Stop and marks
-    // the active row). Resolve this before the first render so the marker shows.
+    // Reflect whether a track is currently driving playback, so the active row
+    // shows its Stop button. Resolve this before the first render so it shows.
     return browserApi.tabs.sendMessage(tab.id, { type: 'getPlaybackStatus' }).then(function (resp) {
-      setResetEnabled(!!(resp && resp.applied));
       appliedId = (resp && resp.appliedId) || null;
-    }).catch(function () { setResetEnabled(false); }).then(function () {
+    }).catch(function () { appliedId = null; }).then(function () {
       return browserApi.tabs.sendMessage(tab.id, { type: 'getStatus' });
     }).then(function (resp) {
       setRecording(!!(resp && resp.recording));

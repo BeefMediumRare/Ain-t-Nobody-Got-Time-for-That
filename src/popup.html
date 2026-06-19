@@ -7,38 +7,37 @@
 <body>
   <h1>Ain't Nobody Got Time for That</h1>
 
-  <button id="record">Start recording (⌥⇧R)</button>
+  <button id="record" type="button">
+    <span class="rec-dot" aria-hidden="true"></span>
+    <span class="rec-label">Start recording</span>
+    <kbd>⌥⇧R</kbd>
+  </button>
 
   <!-- Shown after a recording stops with cues waiting to be named. -->
   <div id="save-form" class="section hidden">
     <h2>Save recording</h2>
     <input id="save-title" type="text" placeholder="Title">
     <textarea id="save-desc" class="short" placeholder="Description (optional)"></textarea>
-    <button id="save-track">Save track</button>
+    <button id="save-track" class="primary">Save track</button>
   </div>
 
-  <!-- Tracks matching the current video. -->
+  <!-- Tracks matching the current video. The live track carries its own Stop, so
+       there's no separate global stop control. -->
   <div class="section">
     <h2 id="tracks-heading">Tracks for this video</h2>
     <ul id="track-list"></ul>
     <div id="tracks-empty" class="muted hidden">No saved tracks for this video yet.</div>
     <div id="source-notices" class="muted"></div>
-    <button id="reset" disabled>Stop &amp; reset to 1×</button>
   </div>
-
-  <!-- Manual JSON input (dev convenience). -->
-  <details class="section">
-    <summary>Import track (JSON)</summary>
-    <textarea id="import-json" class="short" placeholder='{ "youtubeVideoId": "...", "title": "...", "cues": [ { "timestamp": "0:00", "speed": "2" } ] }'></textarea>
-    <button id="import-track">Import</button>
-  </details>
 
   <div id="status" class="status"></div>
 
-  <!-- Track repositories. -->
-  <div class="section">
-    <button id="refresh-repos" class="hidden">Refresh repositories</button>
-    <button id="open-options">Settings…</button>
+  <!-- Compact footer: repo refresh (when repos exist) and settings. -->
+  <div class="footer">
+    <button id="refresh-repos" class="icon-btn hidden" type="button"
+      aria-label="Refresh repositories" title="Refresh repositories">⟳</button>
+    <button id="open-options" class="icon-btn" type="button"
+      aria-label="Settings" title="Settings">⚙</button>
   </div>
 
   <script src="parser.js"></script>

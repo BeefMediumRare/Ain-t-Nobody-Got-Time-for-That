@@ -156,11 +156,58 @@ button:disabled {
   opacity: 0.45;
 }
 
-/* The record button is the popup's primary action: a touch larger and bolder. */
+/* The record button is the popup's primary action: a touch larger and bolder,
+   with a transport-style dot and the shortcut shown as a readout chip. */
 #record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   padding: 11px;
+}
+
+.rec-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--rec);
+}
+
+#record kbd { margin-left: 2px; }
+
+/* While recording, the dot pulses to signal a live session. */
+#record.recording .rec-dot {
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.55); }
+  50% { opacity: 0.45; box-shadow: 0 0 0 4px rgba(244, 63, 94, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #record.recording .rec-dot { animation: none; }
+}
+
+/* Footer: repo refresh + settings as small icon buttons, aligned right. */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.icon-btn {
+  margin-top: 0;
+  width: auto;
+  font-size: 16px;
+  line-height: 1;
+  padding: 7px 11px;
 }
 
 /* Track list */
