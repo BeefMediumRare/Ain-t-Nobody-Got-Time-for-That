@@ -412,8 +412,8 @@
       SpeedTrackStore.getSources()
     ]).then(function (arr) {
       var local = arr[0], repo = arr[1], sources = arr[2];
-      var labelById = {};
-      sources.forEach(function (s) { labelById[s.id] = s.label; });
+      var labelById = {}, urlById = {};
+      sources.forEach(function (s) { labelById[s.id] = s.label; urlById[s.id] = s.url; });
 
       var entries = [];
       var localTitles = {};
@@ -423,7 +423,8 @@
       });
       repo.forEach(function (t) {
         if (localTitles[t.title]) return;
-        entries.push({ track: t, writable: false, sourceId: t.sourceId, sourceLabel: labelById[t.sourceId] || 'Repository' });
+        entries.push({ track: t, writable: false, sourceId: t.sourceId,
+          sourceLabel: labelById[t.sourceId] || 'Repository', sourceUrl: urlById[t.sourceId] || '' });
       });
       return { entries: entries, notices: [] };
     });

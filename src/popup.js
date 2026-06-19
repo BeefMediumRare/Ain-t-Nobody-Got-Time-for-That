@@ -88,11 +88,11 @@
     // (Apply/Download only) and carry the source label for display.
     return SpeedTrackSources.listTracksForVideo(videoId).then(function (result) {
       currentTracks = result.entries.map(function (e) {
-        return { track: e.track, writable: e.writable, sourceLabel: e.sourceLabel };
+        return { track: e.track, writable: e.writable, sourceLabel: e.sourceLabel, sourceUrl: e.sourceUrl };
       });
       show(emptyEl, currentTracks.length === 0);
       currentTracks.forEach(function (e) {
-        listEl.appendChild(renderTrackItem(e.track, e.writable, e.sourceLabel));
+        listEl.appendChild(renderTrackItem(e.track, e.writable, e.sourceLabel, e.sourceUrl));
       });
       if (result.notices && result.notices.length) noticesEl.textContent = result.notices.join(' ');
       refreshSaveButton();
@@ -131,7 +131,7 @@
     }
   }
 
-  function renderTrackItem(track, writable, sourceLabel) {
+  function renderTrackItem(track, writable, sourceLabel, sourceUrl) {
     var li = document.createElement('li');
     li.className = 'track';
     // Tint the user's own (local, authored) tracks so they stand apart from the
@@ -164,7 +164,18 @@
     if (!writable && sourceLabel) {
       var src = document.createElement('div');
       src.className = 'muted';
-      src.textContent = 'from ' + sourceLabel;
+      src.appendChild(document.createTextNode('from '));
+      if (sourceUrl) {
+        // Link to the repo folder it was synced from, opened in a new tab.
+        var link = document.createElement('a');
+        link.href = sourceUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = sourceLabel;
+        src.appendChild(link);
+      } else {
+        src.appendChild(document.createTextNode(sourceLabel));
+      }
       li.appendChild(src);
     }
 
