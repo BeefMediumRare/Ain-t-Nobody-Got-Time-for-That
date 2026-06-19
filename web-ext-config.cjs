@@ -2,8 +2,6 @@
 // Keeps dev-only content out of the shipped package.
 module.exports = {
   ignoreFiles: [
-    'tracks',
-    'tracks/**',
     'test',
     'test/**',
     'icons/icon-128.png',
