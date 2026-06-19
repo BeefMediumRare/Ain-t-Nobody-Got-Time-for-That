@@ -238,15 +238,31 @@ p.muted {
   background: var(--surface-2);
 }
 
+/* "Delete all" is rare and destructive, so it sits as a compact button on the
+   right rather than a full-width bar. (Scoped to the local body's details so it
+   doesn't catch the repo rows' Refresh/Delete actions.) */
+details > .track-actions {
+  justify-content: flex-end;
+  margin: 8px 0 14px;
+}
+
+details > .track-actions button {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
 /* The This device track list: video-id groups, each with its track rows. */
 .subtrack-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   padding: 0;
 }
 
-.subtrack-list > li {
-  margin-bottom: 8px;
+.subtrack-list > li + li {
+  margin-top: 14px;
 }
 
 .subtrack-vid {
@@ -255,19 +271,28 @@ p.muted {
   font-size: 11px;
   color: var(--text-faint);
   text-decoration: none;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .subtrack-vid:hover {
   text-decoration: underline;
 }
 
+/* Track rows sit indented under their video id with a left rail tying them to the
+   group, and a hover fill so each reads as its own row. */
 .subtrack {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 2px 0;
+  gap: 12px;
+  margin-left: 4px;
+  padding: 5px 8px 5px 14px;
+  border-left: 2px solid var(--border);
+  border-radius: 0 6px 6px 0;
+}
+
+.subtrack:hover {
+  background: var(--surface-3);
 }
 
 .subtrack-title {
@@ -277,11 +302,21 @@ p.muted {
   white-space: nowrap;
 }
 
+/* Quiet ghost button: red text, no outline, faint fill on hover — destructive but
+   not shouting from every row. */
 .subtrack button {
+  flex: none;
   width: auto;
-  flex: 0 0 auto;
-  padding: 3px 8px;
+  margin: 0;
+  padding: 4px 9px;
   font-size: 12px;
+  background: none;
+  border-color: transparent;
+}
+
+.subtrack button:hover {
+  background: rgba(248, 112, 128, 0.14);
+  border-color: transparent;
 }
 
 /* Secondary lines under a source's title (URL, counts, last sync). */
