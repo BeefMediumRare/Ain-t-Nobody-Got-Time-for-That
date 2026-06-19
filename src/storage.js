@@ -6,11 +6,16 @@
 //
 // Persisted state:
 //   tracks       { [videoId]: Track[] }  — saved/imported local tracks, by video id
-//   repoTracks   { [sourceId]: { syncedAt, etag, byVideo } } — read-only tracks
-//                                           synced from a GitHub source
+//   repoTracks   { [sourceId]: { syncedAt, etag, index, byVideo } } — read-only
+//                tracks from a GitHub source. `index` { [videoId]: [path] } is the
+//                lightweight listing built on sync (videoId from the filename);
+//                `byVideo` { [videoId]: Track[] } caches the files actually fetched
+//                on demand (videoId from the file, each track stamped `fetchedAt`).
 //   speedLevels  { "1":1, "2":2, ... }   — code->rate prefs (edited in Settings)
 //   showSegments boolean                 — draw the speed bands on the progress
 //                                           bar during playback (default true)
+//   cacheExpiryDays number               — prune fetched repo tracks older than
+//                                           this many days (default 7)
 //   sources      [{ id, type, label }]   — track repositories: "local" plus
 //                                           configured GitHub repos
 //
@@ -31,8 +36,11 @@
     repoTracks: 'speedTrack.repoTracks',
     speedLevels: 'speedTrack.speedLevels',
     showSegments: 'speedTrack.showSegments',
+    cacheExpiryDays: 'speedTrack.cacheExpiryDays',
     sources: 'speedTrack.sources'
   };
+
+  var DEFAULT_CACHE_EXPIRY_DAYS = 7;
 
   // A stable internal id for a track. Used for local and synced repo tracks.
   function genId() {
@@ -157,16 +165,71 @@
     });
   }
 
-  function setRepoTracks(sourceId, byVideo, meta) {
+  // Store a source's index (the sync output). A fresh listing (this only runs on a
+  // 200, i.e. the tree changed) invalidates the cache: tracks are re-fetched on
+  // demand, so an edited file is picked up rather than served stale until expiry.
+  // A 304 refresh keeps the cache and goes through touchRepoTracks instead.
+  function setRepoIndex(sourceId, index, meta) {
     return getAllRepoTracks().then(function (all) {
-      var prior = all[sourceId];
+      var prior = all[sourceId] || {};
       all[sourceId] = {
         syncedAt: (meta && meta.syncedAt != null) ? meta.syncedAt : Date.now(),
-        etag: (meta && meta.etag != null) ? meta.etag : (prior && prior.etag) || null,
-        byVideo: byVideo || {}
+        etag: (meta && meta.etag != null) ? meta.etag : (prior.etag || null),
+        index: index || {},
+        byVideo: {}
       };
       return set(KEYS.repoTracks, all);
     });
+  }
+
+  // Cache lazily-fetched tracks for a source, keyed by their own youtubeVideoId
+  // (authoritative once the file is read) and stamped with fetchedAt. Replaces any
+  // existing cache entry for the same file. Resolves the number stored.
+  function addRepoCacheTracks(sourceId, tracks, fetchedAt) {
+    if (!tracks || !tracks.length) return Promise.resolve(0);
+    return getAllRepoTracks().then(function (all) {
+      var entry = all[sourceId];
+      if (!entry) return 0;
+      var byVideo = entry.byVideo || (entry.byVideo = {});
+      var stamp = (fetchedAt != null) ? fetchedAt : Date.now();
+      tracks.forEach(function (t) {
+        if (!t.youtubeVideoId) return;
+        t.fetchedAt = stamp;
+        var list = byVideo[t.youtubeVideoId] || (byVideo[t.youtubeVideoId] = []);
+        var idx = list.findIndex(function (x) { return x.sourcePath && x.sourcePath === t.sourcePath; });
+        if (idx >= 0) list[idx] = t; else list.push(t);
+      });
+      return set(KEYS.repoTracks, all).then(function () { return tracks.length; });
+    });
+  }
+
+  // Walk every source's cache and drop the tracks `remove(track)` selects, leaving
+  // the indexes alone (dropped files re-fetch on demand). The shared core for both
+  // expiry pruning and the manual clear, so the two can't diverge. Resolves the
+  // count removed.
+  function sweepRepoCache(remove) {
+    return getAllRepoTracks().then(function (all) {
+      var removed = 0;
+      Object.keys(all).forEach(function (sid) {
+        var byVideo = all[sid] && all[sid].byVideo;
+        if (!byVideo) return;
+        Object.keys(byVideo).forEach(function (vid) {
+          var kept = byVideo[vid].filter(function (t) {
+            if (remove(t)) { removed++; return false; }
+            return true;
+          });
+          if (kept.length) byVideo[vid] = kept; else delete byVideo[vid];
+        });
+      });
+      return removed ? set(KEYS.repoTracks, all).then(function () { return removed; }) : 0;
+    });
+  }
+
+  // Auto-expiry: drop cached tracks older than maxAgeMs.
+  function pruneRepoCache(maxAgeMs) {
+    if (!(maxAgeMs > 0)) return Promise.resolve(0);
+    var cutoff = Date.now() - maxAgeMs;
+    return sweepRepoCache(function (t) { return t.fetchedAt != null && t.fetchedAt < cutoff; });
   }
 
   // Update only the sync metadata (after a 304 refresh), keeping stored tracks.
@@ -177,6 +240,12 @@
       if (meta && meta.etag != null) all[sourceId].etag = meta.etag;
       return set(KEYS.repoTracks, all);
     });
+  }
+
+  // Manual clear: drop every cached track (same sweep as expiry, no age limit).
+  // A safe way to reclaim space or watch lazy loading from a clean slate.
+  function clearRepoCache() {
+    return sweepRepoCache(function () { return true; });
   }
 
   function deleteRepoTracks(sourceId) {
@@ -215,6 +284,17 @@
 
   function setShowSegments(on) {
     return set(KEYS.showSegments, !!on);
+  }
+
+  // How many days a lazily-fetched repo track survives in the cache before pruning.
+  function getCacheExpiryDays() {
+    return get(KEYS.cacheExpiryDays).then(function (v) {
+      return (v != null && v > 0) ? v : DEFAULT_CACHE_EXPIRY_DAYS;
+    });
+  }
+
+  function setCacheExpiryDays(days) {
+    return set(KEYS.cacheExpiryDays, days);
   }
 
   // ---- Sources / repositories -----------------------------------------------
@@ -280,7 +360,10 @@
     getAllRepoTracks: getAllRepoTracks,
     getRepoTracksMeta: getRepoTracksMeta,
     getRepoTracksForVideo: getRepoTracksForVideo,
-    setRepoTracks: setRepoTracks,
+    setRepoIndex: setRepoIndex,
+    addRepoCacheTracks: addRepoCacheTracks,
+    pruneRepoCache: pruneRepoCache,
+    clearRepoCache: clearRepoCache,
     touchRepoTracks: touchRepoTracks,
     deleteRepoTracks: deleteRepoTracks,
     countRepoTracks: countRepoTracks,
@@ -288,6 +371,8 @@
     setSpeedLevels: setSpeedLevels,
     getShowSegments: getShowSegments,
     setShowSegments: setShowSegments,
+    getCacheExpiryDays: getCacheExpiryDays,
+    setCacheExpiryDays: setCacheExpiryDays,
     getSources: getSources,
     addSource: addSource,
     deleteSource: deleteSource,

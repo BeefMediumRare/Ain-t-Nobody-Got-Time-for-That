@@ -61,6 +61,7 @@
     var video = getVideo();
     if (video) video.playbackRate = 1;
     if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+    reportActive(false);
   }
 
   // ---- In-tab video changes -------------------------------------------------
@@ -78,6 +79,14 @@
     }
   }
 
+  // Tell the background whether a track is currently driving playback, so the
+  // toolbar badge can flag it — the on-page cue that survives hiding the bands.
+  function reportActive(on) {
+    if (browserApi && browserApi.runtime) {
+      browserApi.runtime.sendMessage({ type: 'active', on: !!on });
+    }
+  }
+
   function handleVideoChange(newId) {
     activeVideoId = newId;
     // Leave an in-progress recording alone; its cues belong to that session.
@@ -91,6 +100,7 @@
       var video = getVideo();
       if (hadTrack && video) video.playbackRate = 1;
       if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+      if (hadTrack) reportActive(false);
     }
     reportVideoId(newId);
   }
@@ -112,6 +122,7 @@
         if (showSegments && window.SpeedTrackTimeline && !window.__speedTrackRecording) {
           window.SpeedTrackTimeline.renderSegments(segments);
         }
+        reportActive(segments.length > 0);
         var video = getVideo();
         sendResponse({ ok: true, segmentCount: segments.length, videoFound: !!video });
         return true;

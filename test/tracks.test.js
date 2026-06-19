@@ -1,8 +1,8 @@
 // Minimal test runner — `node test/tracks.test.js`. Exits non-zero on failure.
 // Covers the pure helpers only (URL parsing, the track-file filter, grouping);
 // the network/sync methods are verified manually.
-const { parseRepoUrl, treeApiUrl, rawUrl, isTrackFile, filterTreeForTracks, groupByVideo } =
-  require('../src/tracks.js');
+const { parseRepoUrl, treeApiUrl, rawUrl, isTrackFile, filterTreeForTracks, groupByVideo,
+  videoIdFromPath, buildIndex } = require('../src/tracks.js');
 
 let failed = 0;
 function eq(label, got, want) {
@@ -146,6 +146,21 @@ eq('groupByVideo groups by youtubeVideoId',
     b: [{ youtubeVideoId: 'b', title: '2' }] });
 
 eq('groupByVideo skips id-less', groupByVideo([{ title: 'x' }]), {});
+
+// ---- videoIdFromPath ------------------------------------------------------
+
+eq('videoIdFromPath nested', videoIdFromPath('tracks/Chan/VID12345_focus.json'), 'VID12345');
+eq('videoIdFromPath root', videoIdFromPath('0aQaNG9Ao7Y_focus-on-throws.json'), '0aQaNG9Ao7Y');
+eq('videoIdFromPath no underscore -> null', videoIdFromPath('tracks/README.json'), null);
+eq('videoIdFromPath empty -> null', videoIdFromPath(''), null);
+
+// ---- buildIndex -----------------------------------------------------------
+
+eq('buildIndex groups by filename id',
+  buildIndex(['tracks/AAAAAAAA_a.json', 'tracks/Chan/AAAAAAAA_b.json', 'tracks/BBBBBBBB_c.json']),
+  { AAAAAAAA: ['tracks/AAAAAAAA_a.json', 'tracks/Chan/AAAAAAAA_b.json'],
+    BBBBBBBB: ['tracks/BBBBBBBB_c.json'] });
+eq('buildIndex empty', buildIndex([]), {});
 
 console.log(failed ? `\n${failed} failed` : '\nAll passed');
 process.exit(failed ? 1 : 0);

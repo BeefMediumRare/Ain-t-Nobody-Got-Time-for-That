@@ -47,11 +47,20 @@
   <div class="section">
     <h2>Track repositories</h2>
     <p class="muted">
-      Add a public GitHub repository folder to sync its tracks. Synced tracks are
-      read-only and appear next to your own tracks on the matching videos. GitHub is
-      only contacted when you add a repository or press Refresh.
+      Add a public GitHub repository folder to index its tracks. Synced tracks are
+      read-only and appear next to your own tracks on the matching videos. The track
+      list is fetched on add and refresh; each track's file is downloaded the first
+      time you open its video, then cached.
     </p>
-    <button id="refresh-all">Refresh all</button>
+    <label class="field">
+      Forget cached repo tracks after
+      <input id="cache-expiry" type="number" min="1" step="1" class="num-inline"> days
+    </label>
+    <div class="actions-row">
+      <button id="refresh-all">Refresh all</button>
+      <button id="clear-cache">Clear cached tracks</button>
+    </div>
+    <div id="repo-stats" class="source-meta"></div>
     <ul id="source-list"></ul>
   </div>
 

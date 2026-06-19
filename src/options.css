@@ -62,6 +62,26 @@ p.muted {
   font-style: italic;
 }
 
+/* A narrow number input sitting inline within a sentence-style label. */
+.num-inline {
+  width: 56px;
+  margin: 0 4px;
+}
+
+/* Buttons that belong together on one line (Refresh all / Clear cached). */
+.actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.actions-row button {
+  width: auto;
+}
+
+#repo-stats {
+  margin: 6px 0 0;
+}
+
 /* Secondary lines under a source's title (URL, counts, last sync). */
 .source-meta {
   font-size: 12px;

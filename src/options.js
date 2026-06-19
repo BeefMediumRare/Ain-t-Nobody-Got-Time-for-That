@@ -15,7 +15,10 @@
   var speed3 = document.getElementById('speed-3');
   var saveSpeedsBtn = document.getElementById('save-speeds');
   var showSegments = document.getElementById('show-segments');
+  var cacheExpiry = document.getElementById('cache-expiry');
   var refreshAllBtn = document.getElementById('refresh-all');
+  var clearCacheBtn = document.getElementById('clear-cache');
+  var repoStats = document.getElementById('repo-stats');
   var listEl = document.getElementById('source-list');
   var labelInput = document.getElementById('add-label');
   var urlInput = document.getElementById('add-url');
@@ -56,25 +59,61 @@
     return b;
   }
 
-  function countOf(entry) {
-    if (!entry || !entry.byVideo) return 0;
+  // Sum the lengths of the arrays in a { key: [] } map.
+  function sumLists(map) {
     var n = 0;
-    Object.keys(entry.byVideo).forEach(function (v) { n += entry.byVideo[v].length; });
+    Object.keys(map || {}).forEach(function (k) { n += map[k].length; });
     return n;
+  }
+
+  // Available tracks for a source: the index size (every track file listed),
+  // falling back to the cache for legacy entries synced before the index existed.
+  function countOf(entry) {
+    if (!entry) return 0;
+    return sumLists(entry.index || entry.byVideo);
+  }
+
+  // Approximate bytes a stored value occupies, measured from its JSON form. (We
+  // don't use storage.getBytesInUse — it isn't supported across our targets.)
+  function byteLength(value) {
+    var str = JSON.stringify(value) || '';
+    return (typeof TextEncoder !== 'undefined') ? new TextEncoder().encode(str).length : str.length;
+  }
+
+  function formatBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   function renderSources() {
     return Promise.all([
       SpeedTrackStore.getSources(),
-      SpeedTrackStore.getAllRepoTracks()
+      SpeedTrackStore.getAllRepoTracks(),
+      SpeedTrackStore.getAllTracks()
     ]).then(function (arr) {
-      var sources = arr[0], repoAll = arr[1];
+      var sources = arr[0], repoAll = arr[1], localAll = arr[2];
+      var localCount = sumLists(localAll);
+
       listEl.textContent = '';
-      sources.forEach(function (s) { listEl.appendChild(renderSourceItem(s, repoAll[s.id])); });
+      sources.forEach(function (s) {
+        listEl.appendChild(renderSourceItem(s, repoAll[s.id], localCount));
+      });
+
+      // Roll up repo storage: tracks listed (available), tracks actually fetched
+      // (cached), and the space the whole repo-tracks store occupies.
+      var available = 0, cached = 0;
+      Object.keys(repoAll).forEach(function (sid) {
+        available += countOf(repoAll[sid]);
+        cached += sumLists(repoAll[sid] && repoAll[sid].byVideo);
+      });
+      repoStats.textContent = sources.some(function (s) { return s.type === 'github'; })
+        ? (available + ' available · ' + cached + ' cached · ' + formatBytes(byteLength(repoAll)) + ' in storage')
+        : '';
     });
   }
 
-  function renderSourceItem(s, repoEntry) {
+  function renderSourceItem(s, repoEntry, localCount) {
     var li = document.createElement('li');
     li.className = 'track';
 
@@ -86,7 +125,7 @@
     if (s.type === 'local') {
       var lm = document.createElement('div');
       lm.className = 'source-meta';
-      lm.textContent = 'Tracks saved on this device.';
+      lm.textContent = (localCount || 0) + ' track(s) saved on this device.';
       li.appendChild(lm);
       return li;
     }
@@ -147,6 +186,7 @@
       speed3.value = m['3'];
     });
     SpeedTrackStore.getShowSegments().then(function (on) { showSegments.checked = on; });
+    SpeedTrackStore.getCacheExpiryDays().then(function (d) { cacheExpiry.value = d; });
   }
 
   function saveSpeeds() {
@@ -173,6 +213,14 @@
       setStatus(showSegments.checked
         ? 'Speed segments shown during playback.'
         : 'Speed segments hidden during playback.', 'ok');
+    });
+  });
+
+  cacheExpiry.addEventListener('change', function () {
+    var d = parseInt(cacheExpiry.value, 10);
+    if (!(d >= 1)) { setStatus('Expiry must be at least 1 day.', 'error'); return; }
+    SpeedTrackStore.setCacheExpiryDays(d).then(function () {
+      setStatus('Cached repo tracks now expire after ' + d + ' day(s).', 'ok');
     });
   });
 
@@ -205,6 +253,19 @@
     });
   }
   refreshAllBtn.addEventListener('click', refreshAll);
+
+  // Drop the fetched-track cache (indexes stay). Tracks re-fetch on demand the next
+  // time you open their video — handy for reclaiming space or watching lazy loading.
+  clearCacheBtn.addEventListener('click', function () {
+    SpeedTrackStore.clearRepoCache().then(function (removed) {
+      setStatus(removed
+        ? 'Cleared ' + removed + ' cached repo track(s). They re-download when next opened.'
+        : 'No cached repo tracks to clear.', 'ok');
+      return renderSources();
+    }).catch(function (err) {
+      setStatus('Could not clear cache: ' + err.message, 'error');
+    });
+  });
 
   // ---- Add a repository -----------------------------------------------------
 

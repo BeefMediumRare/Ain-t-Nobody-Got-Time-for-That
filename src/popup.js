@@ -442,6 +442,13 @@
       // tracks; a session ended via the keyboard leaves cues waiting to save.
       return renderTracks().then(function () {
         if (resp && !resp.recording && resp.cues && resp.cues.length) offerSave(resp.cues, resp.edit);
+        // The background fetches repo tracks on video open, but if it hasn't yet
+        // (or this video pre-dates that), fetch now and re-render when any land.
+        if (videoId) {
+          SpeedTrackSources.ensureTracksForVideo(videoId).then(function (n) {
+            if (n) renderTracks();
+          }).catch(function () {});
+        }
       });
     });
   }).catch(function () {

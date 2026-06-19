@@ -1,9 +1,11 @@
 // tracks.js — track sources: the local device plus read-only GitHub repos.
 //
 // A "source" is either the implicit local device or a public GitHub repository
-// folder. Repo tracks are *synced* into storage.local (tagged with the repo's
-// source id) on add and on manual refresh, then read back like local tracks —
-// so opening a video never hits the network. GitHub is contacted only here.
+// folder. Adding or refreshing a repo lists its tree and stores a lightweight
+// *index* of track-file paths (the video id is in each filename), tagged with the
+// repo's source id. Content is fetched lazily — ensureTracksForVideo pulls the
+// files for a video the first time it's opened and caches them in storage.local,
+// where they're read back like local tracks. GitHub is contacted only here.
 //
 // Listing strategy (one rate-limited request per repo, regardless of depth):
 //   GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1   -> the whole tree
@@ -128,6 +130,33 @@
     return out;
   }
 
+  // The video id a track file belongs to, read from its filename "<videoId>_<...>".
+  // isTrackFile already guarantees the basename starts with 8+ id chars then "_".
+  function videoIdFromPath(path) {
+    if (!path) return null;
+    var name = String(path).split('/').pop();
+    var us = name.indexOf('_');
+    return us > 0 ? name.slice(0, us) : null;
+  }
+
+  // The sync output: track-file paths grouped by their filename video id. This is
+  // all a sync stores — content is fetched lazily when a matching video is opened.
+  function buildIndex(paths) {
+    var out = {};
+    (paths || []).forEach(function (p) {
+      var vid = videoIdFromPath(p);
+      if (!vid) return;
+      (out[vid] = out[vid] || []).push(p);
+    });
+    return out;
+  }
+
+  function countIndex(index) {
+    var n = 0;
+    Object.keys(index || {}).forEach(function (vid) { n += index[vid].length; });
+    return n;
+  }
+
   // ---- Internal (browser) helpers -------------------------------------------
 
   function genId() {
@@ -199,16 +228,13 @@
     return Promise.all(workers).then(function () { return results; });
   }
 
-  function countByVideo(byVideo) {
-    var n = 0;
-    Object.keys(byVideo || {}).forEach(function (v) { n += byVideo[v].length; });
-    return n;
-  }
 
-  // Sync one GitHub source into storage. Replaces its stored tracks on a 200;
-  // a 304 leaves them untouched. Resolves { unchanged, count, notices }.
+  // Sync one GitHub source: list the tree and store an index of track-file paths
+  // (one rate-limited request, no content downloads — files are fetched on demand
+  // when a matching video is opened). A 304 leaves the index untouched. Resolves
+  // { unchanged, count, notices }, count being the number of indexed (available)
+  // tracks.
   function syncSource(source) {
-    var parsed = { owner: source.owner, repo: source.repo, branch: source.branch };
     var notices = [];
     return Promise.all([getTree(source), SpeedTrackStore.getAllRepoTracks()]).then(function (arr) {
       var tree = arr[0];
@@ -216,7 +242,7 @@
 
       if (tree.unchanged) {
         return SpeedTrackStore.touchRepoTracks(source.id, { syncedAt: Date.now() }).then(function () {
-          return { unchanged: true, count: priorEntry ? countByVideo(priorEntry.byVideo) : 0, notices: notices };
+          return { unchanged: true, count: priorEntry ? countIndex(priorEntry.index) : 0, notices: notices };
         });
       }
 
@@ -226,34 +252,70 @@
 
       var paths = filterTreeForTracks(tree.tree, source.path, source.maxDepth);
       if (paths.length > MAX_FILES) {
-        notices.push('Found ' + paths.length + ' track files; synced only the first ' + MAX_FILES + '.');
+        notices.push('Found ' + paths.length + ' track files; indexed only the first ' + MAX_FILES + '.');
         paths = paths.slice(0, MAX_FILES);
       }
 
-      // Keep a stable track id for the same file across re-syncs.
-      var priorIdByPath = {};
-      if (priorEntry && priorEntry.byVideo) {
-        Object.keys(priorEntry.byVideo).forEach(function (vid) {
-          priorEntry.byVideo[vid].forEach(function (t) { if (t.sourcePath) priorIdByPath[t.sourcePath] = t.id; });
-        });
-      }
+      var index = buildIndex(paths);
+      return SpeedTrackStore.setRepoIndex(source.id, index, { syncedAt: Date.now(), etag: tree.etag })
+        .then(function () { return { unchanged: false, count: paths.length, notices: notices }; });
+    });
+  }
 
-      var items = paths.map(function (p) { return { path: p, url: rawUrl(parsed, p) }; });
+  // Lazily fetch and cache the tracks for one video, across every repo source.
+  // Only files in the index that aren't already cached are fetched (the cache is
+  // keyed by the file's own video id, so a re-fetch is skipped even if a file's
+  // filename id and content id disagree). Network only — safe to call repeatedly.
+  // Resolves the number of newly cached tracks.
+  function ensureTracksForVideo(videoId) {
+    if (!videoId) return Promise.resolve(0);
+    return Promise.all([SpeedTrackStore.getSources(), SpeedTrackStore.getAllRepoTracks()]).then(function (arr) {
+      var bySource = {};
+      arr[0].forEach(function (s) { bySource[s.id] = s; });
+      var repoAll = arr[1];
+
+      var items = [];          // { source, path, url }
+      var priorIdByKey = {};   // sourceId\npath -> stable track id
+      Object.keys(repoAll).forEach(function (sid) {
+        var entry = repoAll[sid];
+        var cached = {};
+        Object.keys(entry.byVideo || {}).forEach(function (vid) {
+          entry.byVideo[vid].forEach(function (t) {
+            if (t.sourcePath) { cached[t.sourcePath] = true; priorIdByKey[sid + '\n' + t.sourcePath] = t.id; }
+          });
+        });
+        var src = bySource[sid];
+        if (!src || src.type !== 'github') return;
+        var paths = entry.index && entry.index[videoId];
+        if (!paths) return;
+        paths.forEach(function (p) {
+          if (cached[p]) return;
+          items.push({ source: src, path: p, url: rawUrl({ owner: src.owner, repo: src.repo, branch: src.branch }, p) });
+        });
+      });
+
+      if (!items.length) return 0;
+
       return fetchAll(items).then(function (results) {
-        var tracks = [];
-        results.forEach(function (r) {
+        var bySrc = {};
+        results.forEach(function (r, i) {
           if (!r || r.text == null) return;
+          var item = items[i];
           var v = SpeedTrack.validateTrack(r.text);
           if (v.errors.length || !v.track) return;
           var t = v.track;
-          t.id = priorIdByPath[r.path] || genId();
-          t.sourceId = source.id;
-          t.sourcePath = r.path;
-          tracks.push(t);
+          t.id = priorIdByKey[item.source.id + '\n' + item.path] || genId();
+          t.sourceId = item.source.id;
+          t.sourcePath = item.path;
+          (bySrc[item.source.id] = bySrc[item.source.id] || []).push(t);
         });
-        var byVideo = groupByVideo(tracks);
-        return SpeedTrackStore.setRepoTracks(source.id, byVideo, { syncedAt: Date.now(), etag: tree.etag })
-          .then(function () { return { unchanged: false, count: tracks.length, notices: notices }; });
+
+        var now = Date.now();
+        return Object.keys(bySrc).reduce(function (p, sid) {
+          return p.then(function (acc) {
+            return SpeedTrackStore.addRepoCacheTracks(sid, bySrc[sid], now).then(function (n) { return acc + (n || 0); });
+          });
+        }, Promise.resolve(0));
       });
     });
   }
@@ -366,7 +428,10 @@
     isTrackFile: isTrackFile,
     filterTreeForTracks: filterTreeForTracks,
     groupByVideo: groupByVideo,
+    videoIdFromPath: videoIdFromPath,
+    buildIndex: buildIndex,
     syncSource: syncSource,
+    ensureTracksForVideo: ensureTracksForVideo,
     resolveBranch: resolveBranch,
     addAndSync: addAndSync,
     refreshSource: refreshSource,
