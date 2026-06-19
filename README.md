@@ -13,7 +13,7 @@ A Firefox extension that controls YouTube playback speed from a list of timestam
 
 The add-on unloads when Firefox closes, so reload it the same way next session. Saved tracks live in the extension's `storage.local`, so they persist across reloads and reappear automatically for the video they were recorded on.
 
-The toolbar icon shows a **blue badge** with the number of saved tracks available for the current video (red while recording). **Stop & reset to 1×** in the popup drops the active track and returns the video to normal speed.
+The toolbar icon shows a **blue badge** with the number of tracks available for the current video — your own plus any synced from repositories (red while recording). **Stop & reset to 1×** in the popup drops the active track and returns the video to normal speed.
 
 ## Record a track (authoring mode)
 
@@ -53,7 +53,29 @@ A track is a JSON document linked to a YouTube video by id. A video can have sev
 - Timestamps: `h:mm:ss`, `mm:ss`, or raw seconds (`90.5`).
 - A speed applies from its timestamp until the next cue. Before the first cue the rate is left untouched (add a `0:00` cue for a baseline from the start).
 
-**Where tracks come from:** today they're recorded or imported (the **Import track (JSON)** panel takes a document in the shape above) and saved to the extension's `storage.local`. **Download** a track to get a `<videoId>_<title>.json` file you can commit to a shared repository — the filename is prefixed with the video id so a repo can be scanned for matching tracks. GitHub-backed track repositories are planned; the source layer in `src/storage.js` is shaped for them.
+**Where tracks come from:** they're recorded or imported (the **Import track (JSON)** panel takes a document in the shape above) and saved to the extension's `storage.local`, or synced read-only from a GitHub repository (see below). **Download** a track to get a `<videoId>_<title>.json` file you can commit to a shared repository — the filename is prefixed with the video id so a repo can be scanned for matching tracks.
+
+## Track repositories (GitHub)
+
+You can point the extension at one or more **public GitHub repository folders** and have the tracks they contain show up — read-only — alongside your own. Open **Manage repositories…** from the popup (the options page) and paste a folder URL like:
+
+```
+https://github.com/owner/repo/tree/main/tracks
+```
+
+- On **Add**, Firefox asks for permission to reach GitHub (only when you add your first repo), then the folder is **synced**: its track files are fetched and stored locally, tagged with the repository. Opening a video afterwards reads from storage — no network call — so repo tracks work offline and are counted in the badge.
+- Repo tracks are **read-only**: you can **Apply** and **Download** them, but not edit or delete them, and you can't save a local track over a repo track's title (change the title to keep your own copy).
+- **Subfolder scanning** is off by default, so only the folder you point at is read. Turn it on to scan every subfolder, however deep. For a repo split one-folder-per-channel, either point the URL straight at a channel folder (scanning off), or point at the parent and turn scanning on. Layout is otherwise up to you — files are matched by the `<videoId>_…json` filename and validated content.
+- **Refresh** re-syncs a repo (in the options page per-repo, or **Refresh repositories** in the popup for all of them). Listing uses one GitHub API request per repo via the Git Trees API, with an `ETag` so an unchanged repo costs nothing; the track files themselves come from the `raw.githubusercontent.com` CDN, which isn't rate-limited. Unauthenticated GitHub allows 60 API requests/hour, so manual refresh stays well clear.
+- **Delete** removes the repo and all the tracks it synced (it tells you how many first). To change a repo's URL or depth, delete it and add it again.
+
+How tracks are organized in the repo is your call. A reasonable convention is one subfolder per YouTube channel:
+
+```
+tracks/
+  SomeChannel/
+    dQw4w9WgXcQ_skip-the-intro.json
+```
 
 ## Tip
 
@@ -64,4 +86,13 @@ If you also run the **videospeed** extension, disable it on YouTube while testin
 ```
 node test/parser.test.js
 node test/video-id.test.js
+node test/tracks.test.js
 ```
+
+## Contributing
+
+Pull requests are welcome — anyone can open one. Merging is up to the maintainers.
+
+## License
+
+[MIT](LICENSE). Do what you like with it.

@@ -29,7 +29,7 @@
 
   var recording = false;
   var cues = [];             // [{ t, code }]
-  var editMeta = null;       // { title, description } when re-recording a saved track
+  var editMeta = null;       // { id, title, description } when re-recording a saved track
 
   function getVideo() {
     return document.querySelector('video');
@@ -141,7 +141,8 @@
         sendResponse({ ok: true });
       } else if (msg.type === 'editTrack') {
         // Reopen a saved track for editing: seed its cues and remember its meta.
-        startRecording(msg.cues, { title: msg.title, description: msg.description });
+        // The id rides along so the save updates this track in place (never a copy).
+        startRecording(msg.cues, { id: msg.id, title: msg.title, description: msg.description });
         sendResponse({ ok: true });
       } else if (msg.type === 'stopRecording') {
         stopRecording();

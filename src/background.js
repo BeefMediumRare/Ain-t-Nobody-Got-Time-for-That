@@ -22,17 +22,21 @@
     action.setBadgeText({ text: text, tabId: tabId });
   }
 
-  // Blue badge: how many saved tracks match this tab's video. Cleared at zero.
-  // Skipped while recording so the red indicator isn't clobbered.
+  // Blue badge: how many tracks match this tab's video — local plus those synced
+  // from repos (all read from storage, no network). Cleared at zero. Skipped
+  // while recording so the red indicator isn't clobbered.
   function updateTrackBadge(tabId) {
     if (tabId == null || recordingTabs[tabId]) return;
     var videoId = tabVideo[tabId];
-    var lookup = videoId ? SpeedTrackStore.getTracksForVideo(videoId) : Promise.resolve([]);
-    lookup.then(function (tracks) {
+    var lookup = videoId ? Promise.all([
+      SpeedTrackStore.getTracksForVideo(videoId),
+      SpeedTrackStore.getRepoTracksForVideo(videoId)
+    ]).then(function (lists) { return lists[0].length + lists[1].length; }) : Promise.resolve(0);
+    lookup.then(function (count) {
       if (recordingTabs[tabId]) return; // recording started while we awaited
-      if (tracks.length) {
+      if (count) {
         action.setBadgeBackgroundColor({ color: TRACKS_COLOR, tabId: tabId });
-        setText(tabId, String(tracks.length));
+        setText(tabId, String(count));
       } else {
         setText(tabId, '');
       }
@@ -69,10 +73,13 @@
     }
   });
 
-  // Saved tracks changed (recorded/imported/deleted) — refresh every known tab.
+  // Tracks changed (recorded/imported/deleted locally, or a repo synced/removed)
+  // — refresh every known tab.
   if (browserApi.storage && browserApi.storage.onChanged) {
+    var KEYS = SpeedTrackStore.KEYS;
     browserApi.storage.onChanged.addListener(function (changes, area) {
-      if (area !== 'local' || !changes[SpeedTrackStore.KEYS.tracks]) return;
+      if (area !== 'local') return;
+      if (!changes[KEYS.tracks] && !changes[KEYS.repoTracks] && !changes[KEYS.sources]) return;
       Object.keys(tabVideo).forEach(function (id) { updateTrackBadge(Number(id)); });
     });
   }

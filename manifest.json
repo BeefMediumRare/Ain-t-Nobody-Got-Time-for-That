@@ -6,13 +6,21 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "speed-script@local",
-      "strict_min_version": "115.0"
+      "strict_min_version": "127.0"
     }
   },
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "unlimitedStorage"],
+  "optional_host_permissions": [
+    "https://api.github.com/*",
+    "https://raw.githubusercontent.com/*"
+  ],
   "action": {
     "default_title": "Ain't Nobody Got Time for That",
     "default_popup": "src/popup.html"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
   },
   "background": {
     "scripts": ["src/storage.js", "src/background.js"]

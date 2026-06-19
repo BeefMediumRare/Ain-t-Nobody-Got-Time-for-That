@@ -138,6 +138,11 @@
 
   var SCHEMA_VERSION = 1;
 
+  // The on-disk track file extension. Centralized so the Download filename, the
+  // repo-listing filter, and the filename convention all agree (switching to
+  // e.g. '.track' is then a one-line change).
+  var TRACK_EXT = '.json';
+
   // Turn a title into a filesystem-safe, prefix-scannable filename slug.
   function slugifyTitle(title) {
     return String(title == null ? '' : title)
@@ -262,6 +267,7 @@
     trackToSegments: trackToSegments,
     validateTrack: validateTrack,
     SCHEMA_VERSION: SCHEMA_VERSION,
+    TRACK_EXT: TRACK_EXT,
     SPEED_LEVELS: SPEED_LEVELS
   };
 

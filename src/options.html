@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <h1>Track repositories</h1>
+  <p class="muted">
+    Add a public GitHub repository folder to sync its tracks. Synced tracks are
+    read-only and appear next to your own tracks on the matching videos. GitHub is
+    only contacted when you add a repository or press Refresh.
+  </p>
+
+  <!-- Configured sources. -->
+  <div class="section">
+    <h2>Sources</h2>
+    <ul id="source-list"></ul>
+  </div>
+
+  <!-- Add a GitHub repository. -->
+  <div class="section">
+    <h2>Add a GitHub repository</h2>
+    <input id="add-label" type="text" placeholder="Label (optional)">
+    <input id="add-url" type="text"
+      placeholder="https://github.com/owner/repo/tree/branch/folder">
+    <label class="field check">
+      <input type="checkbox" id="add-deep">
+      Also scan subfolders (off scans just this folder)
+    </label>
+    <div id="depth-warning" class="muted hidden">
+      This reads every subfolder, however deep, pulling in all track files in the
+      repository. On a large repo that's a lot to download — best reserved for
+      repos dedicated to tracks.
+    </div>
+    <button id="add-btn">Add repository</button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <script src="parser.js"></script>
+  <script src="storage.js"></script>
+  <script src="tracks.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

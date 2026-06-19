@@ -22,6 +22,7 @@
     <h2 id="tracks-heading">Tracks for this video</h2>
     <ul id="track-list"></ul>
     <div id="tracks-empty" class="muted hidden">No saved tracks for this video yet.</div>
+    <div id="source-notices" class="muted"></div>
     <button id="reset" disabled>Stop &amp; reset to 1×</button>
   </div>
 
@@ -34,9 +35,16 @@
 
   <div id="status" class="status"></div>
 
+  <!-- Track repositories. -->
+  <div class="section">
+    <button id="refresh-repos" class="hidden">Refresh repositories</button>
+    <button id="open-options">Manage repositories…</button>
+  </div>
+
   <script src="parser.js"></script>
   <script src="video-id.js"></script>
   <script src="storage.js"></script>
+  <script src="tracks.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

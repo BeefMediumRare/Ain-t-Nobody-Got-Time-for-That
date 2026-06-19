@@ -21,16 +21,21 @@
   var headingEl = document.getElementById('tracks-heading');
   var listEl = document.getElementById('track-list');
   var emptyEl = document.getElementById('tracks-empty');
+  var noticesEl = document.getElementById('source-notices');
 
   var importArea = document.getElementById('import-json');
   var importBtn = document.getElementById('import-track');
 
   var resetBtn = document.getElementById('reset');
 
+  var refreshBtn = document.getElementById('refresh-repos');
+  var optionsBtn = document.getElementById('open-options');
+
   var recording = false;
   var videoId = null;
   var speedLevels = null;     // code->rate prefs, loaded once on open
   var pendingCues = null;     // cues from a just-ended recording, awaiting a title
+  var editingId = null;       // id of the track being edited (null = saving a new one)
   var currentTracks = [];     // [{ track, writable }] for the current video
 
   function setStatus(msg, kind) {
@@ -69,6 +74,7 @@
 
   function renderTracks() {
     listEl.textContent = '';
+    noticesEl.textContent = '';
     if (!videoId) {
       currentTracks = [];
       headingEl.textContent = 'Open a YouTube video to see its tracks.';
@@ -77,41 +83,59 @@
       return Promise.resolve();
     }
     headingEl.textContent = 'Tracks for this video';
-    return SpeedTrackStore.getTracksForVideo(videoId).then(function (tracks) {
-      // Local-storage tracks are writable. Read-only tracks pulled from a repo
-      // (a future source) would render with writable=false: Apply/Download only.
-      currentTracks = tracks.map(function (t) { return { track: t, writable: true }; });
+    // Local tracks are writable; tracks synced from a repo are read-only
+    // (Apply/Download only) and carry the source label for display.
+    return SpeedTrackSources.listTracksForVideo(videoId).then(function (result) {
+      currentTracks = result.entries.map(function (e) {
+        return { track: e.track, writable: e.writable, sourceLabel: e.sourceLabel };
+      });
       show(emptyEl, currentTracks.length === 0);
-      currentTracks.forEach(function (e) { listEl.appendChild(renderTrackItem(e.track, e.writable)); });
+      currentTracks.forEach(function (e) {
+        listEl.appendChild(renderTrackItem(e.track, e.writable, e.sourceLabel));
+      });
+      if (result.notices && result.notices.length) noticesEl.textContent = result.notices.join(' ');
       refreshSaveButton();
     });
   }
 
-  // The existing track (if any) for the current video matching a title.
-  function findTrackEntry(title) {
+  // The existing track (if any) for the current video matching a title. When
+  // editing, the track being edited is excluded so its own (unchanged) title
+  // isn't read as a clash with itself.
+  function findTrackEntry(title, excludeId) {
     for (var i = 0; i < currentTracks.length; i++) {
-      if (currentTracks[i].track.title === title) return currentTracks[i];
+      var entry = currentTracks[i];
+      if (entry.track.title !== title) continue;
+      if (excludeId && entry.track.id === excludeId) continue;
+      return entry;
     }
     return null;
   }
 
-  // Saving with an existing title overwrites it (a new title makes a new track),
-  // so the button says so. A read-only (repo) track can't be written over, so
-  // saving under its title is blocked — change the title to keep a local copy.
+  // The Save button reflects what saving the current title would do:
+  // - editing, no title clash -> "Update track" (updates in place by id)
+  // - editing, title now owned by a different local track -> blocked (titles stay unique)
+  // - new track, title matches a local one -> "Overwrite track"
+  // - any title that matches a read-only repo track -> blocked
   function refreshSaveButton() {
-    var match = findTrackEntry(titleInput.value.trim());
+    var match = findTrackEntry(titleInput.value.trim(), editingId);
     if (match && !match.writable) {
       saveBtn.textContent = 'Cannot overwrite a read-only track';
       saveBtn.disabled = true;
+    } else if (editingId) {
+      saveBtn.textContent = match ? 'Title already used by another track' : 'Update track';
+      saveBtn.disabled = !!match;
     } else {
       saveBtn.textContent = match ? 'Overwrite track' : 'Save track';
       saveBtn.disabled = false;
     }
   }
 
-  function renderTrackItem(track, writable) {
+  function renderTrackItem(track, writable, sourceLabel) {
     var li = document.createElement('li');
     li.className = 'track';
+    // Tint the user's own (local, authored) tracks so they stand apart from the
+    // read-only ones synced from a repo.
+    li.classList.add(writable ? 'track--local' : 'track--repo');
 
     var title = document.createElement('div');
     title.className = 'track-title';
@@ -125,10 +149,23 @@
       li.appendChild(desc);
     }
 
+    // Read-only tracks come from a repo; show where so it's clear they can't be
+    // edited or overwritten here.
+    if (!writable && sourceLabel) {
+      var src = document.createElement('div');
+      src.className = 'muted';
+      src.textContent = 'from ' + sourceLabel;
+      li.appendChild(src);
+    }
+
     var actions = document.createElement('div');
     actions.className = 'track-actions';
     actions.appendChild(smallButton('Apply', function () { applyTrack(track); }));
     if (writable) actions.appendChild(smallButton('Edit', function () { editTrack(track); }));
+    // Clone forks any track into a new, editable local copy. For repo tracks it's
+    // the only way to make them editable; for local tracks it's how you fork a
+    // variant without overwriting the original (since Edit now updates in place).
+    actions.appendChild(smallButton('Clone', function () { cloneTrack(track); }));
     actions.appendChild(smallButton('Download', function () { downloadTrack(track); }));
     if (writable) {
       var del = smallButton('Delete', function () { deleteTrack(track); });
@@ -162,7 +199,7 @@
   }
 
   function downloadTrack(track) {
-    var name = (track.youtubeVideoId || 'video') + '_' + SpeedTrack.slugifyTitle(track.title) + '.json';
+    var name = (track.youtubeVideoId || 'video') + '_' + SpeedTrack.slugifyTitle(track.title) + SpeedTrack.TRACK_EXT;
     var blob = new Blob([JSON.stringify(track, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -176,10 +213,27 @@
   }
 
   function deleteTrack(track) {
-    SpeedTrackStore.deleteTrack(track.youtubeVideoId, track.title).then(function () {
+    SpeedTrackStore.deleteTrack(track.youtubeVideoId, track.id).then(function () {
       setStatus('Deleted "' + track.title + '".', 'ok');
       return renderTracks();
     });
+  }
+
+  // Clone a read-only repo track into an editable local copy. No page round-trip
+  // is needed — the repo track already carries its cues, so we just prime the save
+  // dialog (prefilled, title suffixed " (clone)") and let the normal save path mint
+  // a fresh local track.
+  function cloneTrack(track) {
+    pendingCues = SpeedTrack.trackToCues(track);
+    if (!pendingCues.length) { setStatus('Track has no usable cues to clone.', 'error'); return; }
+    editingId = null;
+    titleInput.value = (track.title || 'Untitled') + ' (clone)';
+    descInput.value = track.description || '';
+    show(saveForm, true);
+    refreshSaveButton();
+    titleInput.focus();
+    titleInput.select();
+    setStatus('Cloning "' + track.title + '" into a local copy. Adjust and Save.', 'ok');
   }
 
   // Reopen a saved track as a recording, seeded with its cues. Ending the session
@@ -191,7 +245,7 @@
     activeTab().then(function (tab) {
       if (!tab) { setStatus('No active tab.', 'error'); return; }
       return browserApi.tabs.sendMessage(tab.id, {
-        type: 'editTrack', cues: cues, title: track.title, description: track.description
+        type: 'editTrack', cues: cues, id: track.id, title: track.title, description: track.description
       }).then(function (resp) {
         if (resp && resp.ok) {
           setRecording(true);
@@ -211,6 +265,7 @@
       if (!tab) { setStatus('No active tab.', 'error'); return; }
       if (!recording) {
         return browserApi.tabs.sendMessage(tab.id, { type: 'startRecording' }).then(function () {
+          editingId = null;
           setRecording(true);
           show(saveForm, false);
           setStatus('Recording. Press 1-4 at any moment to set the speed there.', 'ok');
@@ -230,6 +285,7 @@
   // the original title/description to prefill (keep title = overwrite).
   function offerSave(cues, meta) {
     pendingCues = (cues && cues.length) ? cues : null;
+    editingId = (meta && meta.id) || null;
     if (!pendingCues) {
       show(saveForm, false);
       setStatus('Recording ended (nothing recorded).', 'ok');
@@ -240,8 +296,8 @@
     show(saveForm, true);
     refreshSaveButton();
     titleInput.focus();
-    setStatus(meta && meta.title
-      ? 'Editing "' + meta.title + '". Keep the title to overwrite, or change it to save a new track.'
+    setStatus(editingId
+      ? 'Editing "' + meta.title + '". Save to update it — rename freely; it stays the same track.'
       : 'Recording ended. Name it and Save.', 'ok');
   }
 
@@ -251,9 +307,14 @@
     if (!videoId) { setStatus('No video id for this page — open the video first.', 'error'); return; }
     if (!pendingCues || !pendingCues.length) { setStatus('Nothing recorded to save.', 'error'); return; }
 
-    var match = findTrackEntry(title);
+    var match = findTrackEntry(title, editingId);
     if (match && !match.writable) {
       setStatus('"' + title + '" is read-only — change the title to save a local copy.', 'error');
+      titleInput.focus();
+      return;
+    }
+    if (match && editingId) {
+      setStatus('Another track already uses the title "' + title + '". Pick a unique title.', 'error');
       titleInput.focus();
       return;
     }
@@ -261,8 +322,10 @@
     var track = SpeedTrack.cuesToTrack(pendingCues, {
       videoId: videoId, title: title, description: descInput.value.trim()
     });
+    if (editingId) track.id = editingId;
     SpeedTrackStore.saveTrack(track).then(function () {
       pendingCues = null;
+      editingId = null;
       show(saveForm, false);
       setStatus('Saved "' + title + '". Apply it, or Download to commit to a repo.', 'ok');
       // Forget the take on the page so reopening the popup won't re-offer to save.
@@ -314,6 +377,34 @@
     }).catch(function (err) {
       setStatus('Could not import: ' + err.message, 'error');
     });
+  });
+
+  // ---- Repositories ---------------------------------------------------------
+
+  optionsBtn.addEventListener('click', function () {
+    if (browserApi.runtime.openOptionsPage) browserApi.runtime.openOptionsPage();
+  });
+
+  refreshBtn.addEventListener('click', function () {
+    setStatus('Refreshing repositories…');
+    SpeedTrackSources.refreshAll().then(function (results) {
+      return renderTracks().then(function () {
+        var errs = (results || []).filter(function (r) { return r.error; });
+        if (errs.length) {
+          setStatus('Refreshed with ' + errs.length + ' problem(s): ' +
+            errs.map(function (e) { return e.error.message; }).join(' '), 'error');
+        } else {
+          setStatus('Repositories refreshed.', 'ok');
+        }
+      });
+    }).catch(function (err) {
+      setStatus('Refresh failed: ' + err.message, 'error');
+    });
+  });
+
+  // Only offer Refresh once at least one GitHub repository is configured.
+  SpeedTrackStore.getSources().then(function (sources) {
+    show(refreshBtn, sources.some(function (s) { return s.type === 'github'; }));
   });
 
   // ---- Init -----------------------------------------------------------------
