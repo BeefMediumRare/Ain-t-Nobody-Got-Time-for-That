@@ -9,6 +9,10 @@
       "strict_min_version": "127.0"
     }
   },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
   "permissions": ["activeTab", "storage", "unlimitedStorage"],
   "optional_host_permissions": [
     "https://api.github.com/*",
@@ -16,7 +20,8 @@
   ],
   "action": {
     "default_title": "Ain't Nobody Got Time for That",
-    "default_popup": "src/popup.html"
+    "default_popup": "src/popup.html",
+    "default_icon": "icons/icon.svg"
   },
   "options_ui": {
     "page": "src/options.html",

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Four even bands of the speed ramp from theme.js (1 normal blue, 2 fast
+       green, 3 faster amber, 4 skip red) spread evenly across the tile, with a
+       fast-forward symbol on top so the cool->hot scale reads behind it. -->
+  <defs>
+    <clipPath id="tile">
+      <rect x="0" y="0" width="128" height="128" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="0"  y="0" width="32" height="128" fill="#3b82f6"/>
+    <rect x="32" y="0" width="32" height="128" fill="#22c55e"/>
+    <rect x="64" y="0" width="32" height="128" fill="#f59e0b"/>
+    <rect x="96" y="0" width="32" height="128" fill="#ef4444"/>
+  </g>
+
+  <!-- Fast-forward chevrons in the dark tile color, sitting over the bands.
+       The first arrow covers the green band (x 32..64), the second covers the
+       amber band (x 64..96); the first's tip touches the second's base at x=64. -->
+  <g fill="#1f2430">
+    <path d="M32 40 L64 64 L32 88 Z"/>
+    <path d="M64 40 L96 64 L64 88 Z"/>
+  </g>
+</svg>
