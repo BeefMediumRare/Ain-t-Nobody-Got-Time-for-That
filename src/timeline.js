@@ -114,10 +114,13 @@
     }));
   }
 
-  // Playback: segments are { start, rate }, colored by rate.
+  // Playback: segments are { start, rate, code }, colored by code so a customized
+  // rate still gets its mode's color. Falls back to reverse-mapping the rate for
+  // older segments that carry no code.
   function renderSegments(segments) {
     paint((segments || []).map(function (seg) {
-      return { t: seg.start, color: rateColor(seg.rate), title: seg.rate + 'x' };
+      var color = (seg.code != null) ? codeColor(seg.code) : rateColor(seg.rate);
+      return { t: seg.start, color: color, title: seg.rate + 'x' };
     }));
   }
 

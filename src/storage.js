@@ -8,7 +8,9 @@
 //   tracks       { [videoId]: Track[] }  — saved/imported local tracks, by video id
 //   repoTracks   { [sourceId]: { syncedAt, etag, byVideo } } — read-only tracks
 //                                           synced from a GitHub source
-//   speedLevels  { "1":1, "2":2, ... }   — code->rate prefs (no settings UI yet)
+//   speedLevels  { "1":1, "2":2, ... }   — code->rate prefs (edited in Settings)
+//   showSegments boolean                 — draw the speed bands on the progress
+//                                           bar during playback (default true)
 //   sources      [{ id, type, label }]   — track repositories: "local" plus
 //                                           configured GitHub repos
 //
@@ -28,6 +30,7 @@
     tracks: 'speedTrack.tracks',
     repoTracks: 'speedTrack.repoTracks',
     speedLevels: 'speedTrack.speedLevels',
+    showSegments: 'speedTrack.showSegments',
     sources: 'speedTrack.sources'
   };
 
@@ -204,6 +207,16 @@
     return set(KEYS.speedLevels, map);
   }
 
+  // Whether playback draws the colored speed bands on the progress bar. Defaults
+  // on; only an explicit false hides them.
+  function getShowSegments() {
+    return get(KEYS.showSegments).then(function (v) { return v !== false; });
+  }
+
+  function setShowSegments(on) {
+    return set(KEYS.showSegments, !!on);
+  }
+
   // ---- Sources / repositories -----------------------------------------------
 
   function getSources() {
@@ -273,6 +286,8 @@
     countRepoTracks: countRepoTracks,
     getSpeedLevels: getSpeedLevels,
     setSpeedLevels: setSpeedLevels,
+    getShowSegments: getShowSegments,
+    setShowSegments: setShowSegments,
     getSources: getSources,
     addSource: addSource,
     deleteSource: deleteSource,

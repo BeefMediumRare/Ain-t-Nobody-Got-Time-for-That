@@ -10,8 +10,10 @@
 (function () {
   'use strict';
 
-  var segments = [];   // [{start, rate}], sorted ascending by start
+  var segments = [];   // [{start, rate, code}], sorted ascending by start
   var running = false; // rAF loop active?
+  var appliedId = null; // id of the track currently driving playback (for the popup's marker)
+  var showSegments = true; // draw the colored speed bands? (Settings preference)
 
   var browserApi = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
 
@@ -39,8 +41,8 @@
       if (want !== null && Math.abs(video.playbackRate - want) > 1e-3) {
         video.playbackRate = want;
       }
-      // Keep the ticks on the bar; cheap no-op unless YouTube re-rendered it.
-      if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.refreshSegments(segments);
+      // Keep the bands on the bar; cheap no-op unless YouTube re-rendered it.
+      if (showSegments && window.SpeedTrackTimeline) window.SpeedTrackTimeline.refreshSegments(segments);
     }
     requestAnimationFrame(tick);
   }
@@ -55,6 +57,7 @@
   function stop() {
     running = false;
     segments = [];
+    appliedId = null;
     var video = getVideo();
     if (video) video.playbackRate = 1;
     if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
@@ -82,6 +85,7 @@
       var hadTrack = segments.length > 0;
       running = false;
       segments = [];
+      appliedId = null;
       // YouTube reuses the same <video> element, so a rate we set would carry
       // over to the new video. Undo it (but only one we actually set).
       var video = getVideo();
@@ -102,9 +106,10 @@
       if (msg.type === 'applyTrack') {
         segments = Array.isArray(msg.segments) ? msg.segments.slice() : [];
         segments.sort(function (a, b) { return a.start - b.start; });
+        appliedId = msg.id || null;
         start();
-        // Show the track's ticks straight away (the rAF loop keeps them in sync).
-        if (window.SpeedTrackTimeline && !window.__speedTrackRecording) {
+        // Show the track's bands straight away (the rAF loop keeps them in sync).
+        if (showSegments && window.SpeedTrackTimeline && !window.__speedTrackRecording) {
           window.SpeedTrackTimeline.renderSegments(segments);
         }
         var video = getVideo();
@@ -117,9 +122,30 @@
         return true;
       }
       if (msg.type === 'getPlaybackStatus') {
-        sendResponse({ applied: segments.length > 0 });
+        sendResponse({ applied: segments.length > 0, appliedId: appliedId });
         return true;
       }
+    });
+  }
+
+  // ---- Show-segments preference ---------------------------------------------
+  //
+  // Read once on load, then track live changes from the Settings page: toggling
+  // mid-playback adds or clears the bands without touching the playback rate.
+  if (typeof SpeedTrackStore !== 'undefined') {
+    SpeedTrackStore.getShowSegments().then(function (on) {
+      showSegments = on;
+      if (!on && window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+    });
+  }
+  if (browserApi && browserApi.storage && browserApi.storage.onChanged) {
+    var SHOW_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.showSegments : 'speedTrack.showSegments';
+    browserApi.storage.onChanged.addListener(function (changes, area) {
+      if (area !== 'local' || !changes[SHOW_KEY]) return;
+      showSegments = changes[SHOW_KEY].newValue !== false;
+      if (!window.SpeedTrackTimeline || window.__speedTrackRecording) return;
+      if (showSegments) window.SpeedTrackTimeline.renderSegments(segments);
+      else window.SpeedTrackTimeline.clear();
     });
   }
 

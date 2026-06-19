@@ -1,4 +1,5 @@
-// options.js — manage track repositories (add / refresh / delete).
+// options.js — the Settings page: playback preferences plus track repositories
+// (add / refresh / delete).
 //
 // Repos are immutable once added: to change a URL or depth, delete and re-add.
 // Adding requests GitHub host access on the click (a user gesture), then syncs.
@@ -9,6 +10,12 @@
   var browserApi = (typeof browser !== 'undefined') ? browser : chrome;
   var GH_ORIGINS = ['https://api.github.com/*', 'https://raw.githubusercontent.com/*'];
 
+  var speed1 = document.getElementById('speed-1');
+  var speed2 = document.getElementById('speed-2');
+  var speed3 = document.getElementById('speed-3');
+  var saveSpeedsBtn = document.getElementById('save-speeds');
+  var showSegments = document.getElementById('show-segments');
+  var refreshAllBtn = document.getElementById('refresh-all');
   var listEl = document.getElementById('source-list');
   var labelInput = document.getElementById('add-label');
   var urlInput = document.getElementById('add-url');
@@ -16,6 +23,9 @@
   var depthWarning = document.getElementById('depth-warning');
   var addBtn = document.getElementById('add-btn');
   var statusEl = document.getElementById('status');
+
+  // The loaded speed map, kept so saving can preserve modes we don't edit (Skip).
+  var speedLevels = null;
 
   // Shallow (default) scans only the chosen folder (maxDepth 0); deep scans
   // every subfolder (maxDepth -1). Warn only for the deep case.
@@ -127,6 +137,77 @@
     });
   }
 
+  // ---- Playback preferences -------------------------------------------------
+
+  function loadPlaybackPrefs() {
+    SpeedTrackStore.getSpeedLevels().then(function (m) {
+      speedLevels = m;
+      speed1.value = m['1'];
+      speed2.value = m['2'];
+      speed3.value = m['3'];
+    });
+    SpeedTrackStore.getShowSegments().then(function (on) { showSegments.checked = on; });
+  }
+
+  function saveSpeeds() {
+    var vals = [speed1.value, speed2.value, speed3.value].map(parseFloat);
+    if (!vals.every(function (v) { return v > 0; })) {
+      setStatus('Speeds must be positive numbers.', 'error');
+      return;
+    }
+    // Preserve Skip (code 4) untouched — it has no input and becomes a real skip later.
+    var skip = (speedLevels && speedLevels['4'] != null) ? speedLevels['4'] : 10;
+    var map = { '1': vals[0], '2': vals[1], '3': vals[2], '4': skip };
+    SpeedTrackStore.setSpeedLevels(map).then(function () {
+      speedLevels = map;
+      setStatus('Saved playback speeds.', 'ok');
+    }).catch(function (err) {
+      setStatus('Could not save speeds: ' + err.message, 'error');
+    });
+  }
+  saveSpeedsBtn.addEventListener('click', saveSpeeds);
+
+  // The content script picks this up live via storage.onChanged.
+  showSegments.addEventListener('change', function () {
+    SpeedTrackStore.setShowSegments(showSegments.checked).then(function () {
+      setStatus(showSegments.checked
+        ? 'Speed segments shown during playback.'
+        : 'Speed segments hidden during playback.', 'ok');
+    });
+  });
+
+  // ---- Refresh all repositories ---------------------------------------------
+  //
+  // Sequential (not parallel) so a row of repos doesn't hammer GitHub's rate limit.
+  function refreshAll() {
+    SpeedTrackStore.getSources().then(function (sources) {
+      var repos = sources.filter(function (s) { return s.type === 'github'; });
+      var noun = function (n) { return n + (n === 1 ? ' repository' : ' repositories'); };
+      if (!repos.length) { setStatus('No repositories to refresh.', 'ok'); return; }
+
+      setStatus('Refreshing ' + noun(repos.length) + '…');
+      var updated = 0, failed = 0;
+      var chain = repos.reduce(function (p, s) {
+        return p.then(function () {
+          return SpeedTrackSources.refreshSource(s.id)
+            .then(function (r) { if (r && !r.unchanged) updated++; })
+            .catch(function () { failed++; });
+        });
+      }, Promise.resolve());
+
+      chain.then(function () {
+        var msg = 'Refreshed ' + noun(repos.length) + '.';
+        if (updated) msg += ' ' + updated + ' updated.';
+        if (failed) msg += ' ' + failed + ' failed.';
+        setStatus(msg, failed ? 'error' : 'ok');
+        return renderSources();
+      });
+    });
+  }
+  refreshAllBtn.addEventListener('click', refreshAll);
+
+  // ---- Add a repository -----------------------------------------------------
+
   addBtn.addEventListener('click', function () {
     var url = urlInput.value.trim();
     var label = labelInput.value.trim();
@@ -161,5 +242,6 @@
 
   SpeedTrackStore.ensureSeeded();
   syncDepthWarning();
+  loadPlaybackPrefs();
   renderSources();
 })();

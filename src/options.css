@@ -36,6 +36,32 @@ p.muted {
   margin: 0;
 }
 
+/* One speed mode: a fixed-width label, a narrow value, then a unit/note. */
+.speed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.speed-row label {
+  width: 64px;
+  font-size: 13px;
+}
+
+.speed-row input {
+  width: 72px;
+}
+
+.speed-suffix {
+  color: #888;
+}
+
+.speed-note {
+  font-size: 12px;
+  font-style: italic;
+}
+
 /* Secondary lines under a source's title (URL, counts, last sync). */
 .source-meta {
   font-size: 12px;

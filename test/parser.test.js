@@ -117,14 +117,14 @@ const trk = { youtubeVideoId: 'x', title: 't', cues: [
   { timestamp: '1:23', speed: '1' }, { timestamp: '0:00', speed: '2' }
 ] };
 eq('trackToSegments default', trackToSegments(trk),
-  [{ start: 0, rate: 2 }, { start: 83, rate: 1 }]);
-// custom prefs change the resolved rate
+  [{ start: 0, rate: 2, code: 2 }, { start: 83, rate: 1, code: 1 }]);
+// custom prefs change the resolved rate (the code still rides along for coloring)
 eq('trackToSegments custom prefs', trackToSegments(trk, { 1: 1, 2: 1.5 }),
-  [{ start: 0, rate: 1.5 }, { start: 83, rate: 1 }]);
+  [{ start: 0, rate: 1.5, code: 2 }, { start: 83, rate: 1, code: 1 }]);
 // unknown code / bad timestamp are skipped
 eq('trackToSegments skips bad cues',
   trackToSegments({ cues: [{ timestamp: '0:00', speed: '9' }, { timestamp: 'nope', speed: '2' }, { timestamp: '0:30', speed: '2' }] }),
-  [{ start: 30, rate: 2 }]);
+  [{ start: 30, rate: 2, code: 2 }]);
 
 // trackToCues: Track document -> recorder cues [{t, code}] (inverse of cuesToTrack)
 eq('trackToCues', trackToCues({ cues: [
@@ -138,10 +138,12 @@ eq('trackToCues skips bad', trackToCues({ cues: [
 const cuesEdit = [{ t: 0, code: 2 }, { t: 83, code: 1 }, { t: 91, code: 4 }];
 eq('cues round-trip via track', trackToCues(cuesToTrack(cuesEdit, { videoId: 'v', title: 't' })), cuesEdit);
 
-// round-trip: cuesToTrack -> trackToSegments matches parseTrack(formatTrack(...))
+// round-trip: cuesToTrack -> trackToSegments matches parseTrack(formatTrack(...)).
+// parseTrack carries no code, so compare on start/rate only.
 const cuesRt = [{ t: 0, code: 2 }, { t: 83, code: 1 }, { t: 91, code: 3 }];
 eq('track round-trip segments',
-  trackToSegments(cuesToTrack(cuesRt, { videoId: 'v', title: 't' })),
+  trackToSegments(cuesToTrack(cuesRt, { videoId: 'v', title: 't' }))
+    .map(function (s) { return { start: s.start, rate: s.rate }; }),
   parseTrack(formatTrack(cuesRt)).segments);
 
 // validateTrack: a good object normalizes and reports no errors

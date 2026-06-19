@@ -36,6 +36,7 @@
   var speedLevels = null;     // code->rate prefs, loaded once on open
   var pendingCues = null;     // cues from a just-ended recording, awaiting a title
   var editingId = null;       // id of the track being edited (null = saving a new one)
+  var appliedId = null;       // id of the track currently driving playback, for the active marker
   var currentTracks = [];     // [{ track, writable }] for the current video
 
   function setStatus(msg, kind) {
@@ -136,10 +137,19 @@
     // Tint the user's own (local, authored) tracks so they stand apart from the
     // read-only ones synced from a repo.
     li.classList.add(writable ? 'track--local' : 'track--repo');
+    // Mark the track currently driving playback so it's obvious which one is live.
+    var isActive = !!(appliedId && track.id === appliedId);
+    if (isActive) li.classList.add('track--active');
 
     var title = document.createElement('div');
     title.className = 'track-title';
     title.textContent = track.title || '(untitled)';
+    if (isActive) {
+      var badge = document.createElement('span');
+      badge.className = 'track-active-badge';
+      badge.textContent = 'Active';
+      title.appendChild(badge);
+    }
     li.appendChild(title);
 
     if (track.description) {
@@ -184,10 +194,12 @@
     if (!segments.length) { setStatus('Track has no usable cues.', 'error'); return; }
     activeTab().then(function (tab) {
       if (!tab) { setStatus('No active tab.', 'error'); return; }
-      return browserApi.tabs.sendMessage(tab.id, { type: 'applyTrack', segments: segments });
+      return browserApi.tabs.sendMessage(tab.id, { type: 'applyTrack', segments: segments, id: track.id });
     }).then(function (resp) {
       if (resp && resp.ok) {
         setResetEnabled(true);
+        appliedId = track.id;
+        renderTracks();
         var note = resp.videoFound ? '' : ' (no <video> on page yet)';
         setStatus('Applied "' + track.title + '" — ' + resp.segmentCount + ' segment(s).' + note, 'ok');
       } else if (resp !== undefined) {
@@ -346,6 +358,8 @@
       return browserApi.tabs.sendMessage(tab.id, { type: 'stopTrack' }).then(function (resp) {
         if (resp && resp.ok) {
           setResetEnabled(false);
+          appliedId = null;
+          renderTracks();
           setStatus('Stopped. Playback speed reset to 1×.', 'ok');
         }
       });
@@ -414,11 +428,14 @@
 
   activeTab().then(function (tab) {
     if (!tab) return renderTracks();
-    // Reflect whether a track is currently driving playback (enables Stop).
-    browserApi.tabs.sendMessage(tab.id, { type: 'getPlaybackStatus' }).then(function (resp) {
+    // Reflect whether a track is currently driving playback (enables Stop and marks
+    // the active row). Resolve this before the first render so the marker shows.
+    return browserApi.tabs.sendMessage(tab.id, { type: 'getPlaybackStatus' }).then(function (resp) {
       setResetEnabled(!!(resp && resp.applied));
-    }).catch(function () { setResetEnabled(false); });
-    return browserApi.tabs.sendMessage(tab.id, { type: 'getStatus' }).then(function (resp) {
+      appliedId = (resp && resp.appliedId) || null;
+    }).catch(function () { setResetEnabled(false); }).then(function () {
+      return browserApi.tabs.sendMessage(tab.id, { type: 'getStatus' });
+    }).then(function (resp) {
       setRecording(!!(resp && resp.recording));
       if (resp && resp.videoId) videoId = resp.videoId;
       // Render first so the save form's Overwrite/Save label knows the existing

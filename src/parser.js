@@ -166,9 +166,10 @@
     };
   }
 
-  // Resolve a Track's cues into playback segments [{start, rate}] using a code->
-  // rate map (defaults to SPEED_LEVELS). Cues with an unknown code or unparseable
-  // timestamp are skipped. Sorted ascending by start.
+  // Resolve a Track's cues into playback segments [{start, rate, code}] using a
+  // code->rate map (defaults to SPEED_LEVELS). Cues with an unknown code or
+  // unparseable timestamp are skipped. Sorted ascending by start. The code rides
+  // along so the timeline can color bands by intent (the rate may be customized).
   function trackToSegments(track, speedLevels) {
     var map = speedLevels || SPEED_LEVELS;
     var cues = (track && track.cues) || [];
@@ -177,7 +178,7 @@
       var start = parseTimestamp(String(cues[i].timestamp));
       var rate = map[cues[i].speed];
       if (start === null || rate == null) continue;
-      segments.push({ start: start, rate: rate });
+      segments.push({ start: start, rate: rate, code: Number(cues[i].speed) });
     }
     segments.sort(function (a, b) { return a.start - b.start; });
     return segments;

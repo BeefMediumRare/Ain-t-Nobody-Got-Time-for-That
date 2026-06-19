@@ -6,16 +6,52 @@
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <h1>Track repositories</h1>
-  <p class="muted">
-    Add a public GitHub repository folder to sync its tracks. Synced tracks are
-    read-only and appear next to your own tracks on the matching videos. GitHub is
-    only contacted when you add a repository or press Refresh.
-  </p>
+  <h1>Settings</h1>
+
+  <!-- Playback preferences. -->
+  <div class="section">
+    <h2>Playback</h2>
+    <p class="muted">
+      Set how fast each mode plays. Tracks store the mode, not the speed, so these
+      preferences decide how fast every track plays for you.
+    </p>
+    <div class="speed-row">
+      <label for="speed-1">Normal</label>
+      <input id="speed-1" type="number" min="0.1" step="0.05" inputmode="decimal">
+      <span class="speed-suffix">×</span>
+    </div>
+    <div class="speed-row">
+      <label for="speed-2">Fast</label>
+      <input id="speed-2" type="number" min="0.1" step="0.05" inputmode="decimal">
+      <span class="speed-suffix">×</span>
+    </div>
+    <div class="speed-row">
+      <label for="speed-3">Faster</label>
+      <input id="speed-3" type="number" min="0.1" step="0.05" inputmode="decimal">
+      <span class="speed-suffix">×</span>
+    </div>
+    <div class="speed-row muted">
+      <label>Skip</label>
+      <span class="speed-fixed">10×</span>
+      <span class="speed-note">skip coming soon</span>
+    </div>
+    <button id="save-speeds">Save speeds</button>
+
+    <label class="field check">
+      <input type="checkbox" id="show-segments">
+      Show speed segments on the progress bar during playback
+    </label>
+  </div>
 
   <!-- Configured sources. -->
   <div class="section">
-    <h2>Sources</h2>
+    <h2>Track repositories</h2>
+    <p class="muted">
+      Add a public GitHub repository folder to sync its tracks. Synced tracks are
+      read-only and appear next to your own tracks on the matching videos. GitHub is
+      only contacted when you add a repository or press Refresh.
+    </p>
+    <button id="refresh-all">Refresh all</button>
     <ul id="source-list"></ul>
   </div>
 
