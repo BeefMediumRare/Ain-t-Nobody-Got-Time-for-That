@@ -12,7 +12,9 @@
   var theme = {
     // Speed ramp by code (1 normal, 2 fast, 3 faster, 4 skip), cool -> hot, so the
     // timeline reads as a velocity scale rather than a set of unrelated colors.
-    speed: { 1: '#22d3ee', 2: '#4ade80', 3: '#fbbf24', 4: '#f43f5e' },
+    // Normal is a clear blue (not cyan) so the first two steps don't blur together
+    // on the bar — the bands also need to survive bright video behind them.
+    speed: { 1: '#3b82f6', 2: '#22c55e', 3: '#f59e0b', 4: '#ef4444' },
     speedDefault: '#69728a',
 
     // Toolbar badge fills. Deeper than the UI accent so white badge text stays

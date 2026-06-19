@@ -16,11 +16,12 @@
   --text-dim: #98a1b2;
   --text-faint: #69728a;
 
-  /* Speed ramp, cool -> hot, by code (1 normal, 2 fast, 3 faster, 4 skip). */
-  --speed-1: #22d3ee;
-  --speed-2: #4ade80;
-  --speed-3: #fbbf24;
-  --speed-4: #f43f5e;
+  /* Speed ramp, cool -> hot, by code (1 normal, 2 fast, 3 faster, 4 skip). Mirror
+     of theme.js — normal is a clear blue so it doesn't blur into the fast green. */
+  --speed-1: #3b82f6;
+  --speed-2: #22c55e;
+  --speed-3: #f59e0b;
+  --speed-4: #ef4444;
 
   --accent: #818cf8;        /* primary actions, links, the active-track glow */
   --accent-press: #6d7cf7;
@@ -250,7 +251,7 @@ li.track--active {
    apart from the solid, committed repo tracks (but not when they're live, where
    the active glow owns the framing). */
 li.track--local:not(.track--active) {
-  border-left: 2px dashed rgba(251, 191, 36, 0.5);
+  border-left: 2px dashed rgba(245, 158, 11, 0.5);
 }
 
 .track-draft-badge {
@@ -263,7 +264,7 @@ li.track--local:not(.track--active) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--speed-3);
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  border: 1px solid rgba(245, 158, 11, 0.4);
   vertical-align: middle;
 }
 

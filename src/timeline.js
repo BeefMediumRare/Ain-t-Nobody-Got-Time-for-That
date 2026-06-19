@@ -90,12 +90,12 @@
 
       // Sit a little above the thin progress bar (a touch thicker than the bar) so
       // the bands read as a speed legend without hiding YouTube's played-fill. A
-      // 1px dark seam on the trailing edge separates adjacent bands of different
-      // speeds so the boundaries stay crisp over YouTube's bar.
+      // thin dark ring outlines each band: it separates adjacent speeds and keeps
+      // the colors legible when bright video (e.g. grass) shows through behind them.
       var band = document.createElement('div');
       band.style.cssText =
         'position:absolute;bottom:calc(50% + 3px);height:6px;border-radius:1px;' +
-        'pointer-events:none;box-shadow:1px 0 0 rgba(0,0,0,0.45);' +
+        'pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,0.5);' +
         'left:' + leftPct + '%;width:' + widthPct + '%;background:' + points[i].color + ';';
       if (points[i].title) band.title = points[i].title;
       overlay.appendChild(band);
