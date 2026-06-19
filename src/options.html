@@ -21,29 +21,31 @@
             Set how fast each mode plays. Tracks store the mode, not the speed, so these
             preferences decide how fast every track plays for you. Changes save as you make them.
           </p>
-          <div class="speed-row">
-            <span class="speed-dot" data-code="1" aria-hidden="true"></span>
-            <label for="speed-1">Normal</label>
-            <input id="speed-1" type="number" min="0.1" step="0.05" inputmode="decimal">
-            <span class="speed-suffix">×</span>
-          </div>
-          <div class="speed-row">
-            <span class="speed-dot" data-code="2" aria-hidden="true"></span>
-            <label for="speed-2">Fast</label>
-            <input id="speed-2" type="number" min="0.1" step="0.05" inputmode="decimal">
-            <span class="speed-suffix">×</span>
-          </div>
-          <div class="speed-row">
-            <span class="speed-dot" data-code="3" aria-hidden="true"></span>
-            <label for="speed-3">Faster</label>
-            <input id="speed-3" type="number" min="0.1" step="0.05" inputmode="decimal">
-            <span class="speed-suffix">×</span>
-          </div>
-          <div class="speed-row muted">
-            <span class="speed-dot" data-code="4" aria-hidden="true"></span>
-            <label>Skip</label>
-            <span class="speed-fixed">10×</span>
-            <span class="speed-note">skip coming soon</span>
+          <div class="speed-grid">
+            <div class="speed-row">
+              <span class="speed-dot" data-code="1" aria-hidden="true"></span>
+              <label for="speed-1">Normal</label>
+              <input id="speed-1" type="number" min="0.1" step="0.05" inputmode="decimal">
+              <span class="speed-suffix">×</span>
+            </div>
+            <div class="speed-row">
+              <span class="speed-dot" data-code="2" aria-hidden="true"></span>
+              <label for="speed-2">Fast</label>
+              <input id="speed-2" type="number" min="0.1" step="0.05" inputmode="decimal">
+              <span class="speed-suffix">×</span>
+            </div>
+            <div class="speed-row">
+              <span class="speed-dot" data-code="3" aria-hidden="true"></span>
+              <label for="speed-3">Faster</label>
+              <input id="speed-3" type="number" min="0.1" step="0.05" inputmode="decimal">
+              <span class="speed-suffix">×</span>
+            </div>
+            <div class="speed-row muted">
+              <span class="speed-dot" data-code="4" aria-hidden="true"></span>
+              <label>Skip</label>
+              <span class="speed-fixed">10×</span>
+              <span class="speed-note">soon</span>
+            </div>
           </div>
           <label class="field check">
             <input type="checkbox" id="show-segments">

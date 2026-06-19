@@ -97,12 +97,20 @@ p.muted {
   accent-color: var(--accent);
 }
 
-/* One speed mode: a ramp-colored dot, a fixed-width label, the value, then a unit. */
+/* The four modes pack two-up to keep the card compact. */
+.speed-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin: 12px 0;
+}
+
+/* One speed mode: a ramp-colored dot, a fixed-width label, the value, then a unit.
+   The input flexes to fill the cell so the row never overflows a narrow column. */
 .speed-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
 }
 
 /* The dot ties each mode to its band on the timeline and the popup strip. */
@@ -120,12 +128,14 @@ p.muted {
 .speed-dot[data-code="4"] { background: var(--speed-4); }
 
 .speed-row label {
-  width: 60px;
+  width: 52px;
+  flex: none;
   font-size: 13px;
 }
 
 .speed-row input {
-  width: 72px;
+  width: 56px;
+  flex: none;
 }
 
 .speed-suffix {
