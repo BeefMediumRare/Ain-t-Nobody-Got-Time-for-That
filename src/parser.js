@@ -18,7 +18,7 @@
 
   // Code -> playback rate. This is where per-user speed preferences will plug
   // in later (and where negative/slower codes would be added).
-  var SPEED_LEVELS = { 1: 1, 2: 2, 3: 2.5, 4: 10 };
+  var SPEED_LEVELS = { 1: 1, 2: 2, 3: 3, 4: 10 };
 
   // Parse a timestamp token into seconds. Returns null if invalid.
   function parseTimestamp(token) {

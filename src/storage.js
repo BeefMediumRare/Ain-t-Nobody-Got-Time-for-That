@@ -50,7 +50,7 @@
 
   function defaultSpeedLevels() {
     var src = (typeof SpeedTrack !== 'undefined' && SpeedTrack.SPEED_LEVELS) ||
-              { 1: 1, 2: 2, 3: 2.5, 4: 10 };
+              { 1: 1, 2: 2, 3: 3, 4: 10 };
     var out = {};
     for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) out[String(k)] = src[k];
     return out;

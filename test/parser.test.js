@@ -17,7 +17,7 @@ eq('ts raw seconds', parseTimestamp('90.5'), 90.5);
 eq('ts invalid', parseTimestamp('1:2:3:4'), null);
 
 // speed-level table: 1=normal, 2=fast, 3=faster, 4=skip
-eq('speed levels', SPEED_LEVELS, { 1: 1, 2: 2, 3: 2.5, 4: 10 });
+eq('speed levels', SPEED_LEVELS, { 1: 1, 2: 2, 3: 3, 4: 10 });
 
 // full parse: numeric codes, comments
 const r = parseTrack([
@@ -32,7 +32,7 @@ eq('segments', r.segments, [
   { start: 0, rate: 2 },
   { start: 83, rate: 1 },
   { start: 90, rate: 10 },
-  { start: 91, rate: 2.5 }
+  { start: 91, rate: 3 }
 ]);
 
 // out-of-order input is sorted
@@ -42,7 +42,7 @@ eq('sorted', parseTrack('2:00 2\n0:30 1').segments.map(x => x.start), [30, 120])
 eq('before first -> null', rateAt(r.segments, -1), null);
 eq('at exact start', rateAt(r.segments, 83), 1);
 eq('between', rateAt(r.segments, 85), 1);
-eq('after last', rateAt(r.segments, 1000), 2.5);
+eq('after last', rateAt(r.segments, 1000), 3);
 
 // error reporting: bad timestamp, unknown code, missing code
 const errs = parseTrack('nope:nope 1\n0:00 5\n0:00').errors;
