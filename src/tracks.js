@@ -135,6 +135,9 @@
   function videoIdFromPath(path) {
     if (!path) return null;
     var name = String(path).split('/').pop();
+    // YouTube ids are 11 chars and may contain '_' or '-', so the convention's
+    // separator is the underscore at index 11 — not necessarily the first one.
+    if (name.length > 11 && name.charAt(11) === '_') return name.slice(0, 11);
     var us = name.indexOf('_');
     return us > 0 ? name.slice(0, us) : null;
   }

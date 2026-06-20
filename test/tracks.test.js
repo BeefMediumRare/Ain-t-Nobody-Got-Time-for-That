@@ -153,6 +153,8 @@ eq('videoIdFromPath nested', videoIdFromPath('tracks/Chan/VID12345_focus.json'),
 eq('videoIdFromPath root', videoIdFromPath('0aQaNG9Ao7Y_focus-on-throws.json'), '0aQaNG9Ao7Y');
 eq('videoIdFromPath no underscore -> null', videoIdFromPath('tracks/README.json'), null);
 eq('videoIdFromPath empty -> null', videoIdFromPath(''), null);
+eq('videoIdFromPath id with underscore', videoIdFromPath('BVZ7_oWHDNM_finalb9.json'), 'BVZ7_oWHDNM');
+eq('videoIdFromPath id without underscore unaffected', videoIdFromPath('oiUouPQcJhE_x.json'), 'oiUouPQcJhE');
 
 // ---- buildIndex -----------------------------------------------------------
 
