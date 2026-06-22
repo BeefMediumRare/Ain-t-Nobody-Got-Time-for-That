@@ -434,7 +434,12 @@
   refreshBtn.addEventListener('click', function () {
     setStatus('Refreshing repositories…');
     SpeedTrackSources.refreshAll().then(function (results) {
-      return renderTracks().then(function () {
+      // refreshAll rebuilds the path index and clears the content cache, so the
+      // current video's tracks need re-fetching before they'll render — otherwise
+      // they only reappear next time the popup opens (init fetches them).
+      var fetched = videoId ? SpeedTrackSources.ensureTracksForVideo(videoId).catch(function () {})
+                            : Promise.resolve();
+      return fetched.then(renderTracks).then(function () {
         var errs = (results || []).filter(function (r) { return r.error; });
         if (errs.length) {
           setStatus('Refreshed with ' + errs.length + ' problem(s): ' +
