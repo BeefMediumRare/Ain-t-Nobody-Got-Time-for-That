@@ -149,7 +149,15 @@
     browserApi.storage.onChanged.addListener(function (changes, area) {
       if (area !== 'local') return;
       if (changes[KEYS.tracks] || changes[KEYS.repoTracks] || changes[KEYS.sources]) {
-        Object.keys(tabVideo).forEach(function (id) { updateTrackBadge(Number(id)); });
+        // Tracks just changed (recorded, imported, or a repo synced/refreshed).
+        // Refresh the badge, and retry auto-apply: a video that had nothing to
+        // apply may now match a freshly available track. maybeAutoApply's own
+        // guards skip tabs already playing or already auto-applied for their video.
+        Object.keys(tabVideo).forEach(function (id) {
+          var tabId = Number(id);
+          updateTrackBadge(tabId);
+          maybeAutoApply(tabId);
+        });
       }
       // Turning auto-apply on catches up every open tab that isn't already playing
       // a track, so it takes effect without reopening each video.
