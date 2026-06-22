@@ -14,6 +14,8 @@
 //   speedLevels  { "1":1, "2":2, ... }   — code->rate prefs (edited in Settings)
 //   showSegments boolean                 — draw the speed bands on the progress
 //                                           bar during playback (default true)
+//   autoApply    boolean                 — apply the top matching track on its own
+//                                           when a video opens (default false)
 //   cacheExpiryDays number               — prune fetched repo tracks older than
 //                                           this many days (default 7)
 //   sources      [{ id, type, label }]   — track repositories: "local" plus
@@ -36,6 +38,7 @@
     repoTracks: 'speedTrack.repoTracks',
     speedLevels: 'speedTrack.speedLevels',
     showSegments: 'speedTrack.showSegments',
+    autoApply: 'speedTrack.autoApply',
     cacheExpiryDays: 'speedTrack.cacheExpiryDays',
     sources: 'speedTrack.sources'
   };
@@ -292,6 +295,17 @@
     return set(KEYS.showSegments, !!on);
   }
 
+  // Whether opening a video applies its top matching track on its own (the
+  // background does it; no popup needed). Off unless explicitly turned on, since
+  // it changes playback speed without being asked.
+  function getAutoApply() {
+    return get(KEYS.autoApply).then(function (v) { return v === true; });
+  }
+
+  function setAutoApply(on) {
+    return set(KEYS.autoApply, !!on);
+  }
+
   // How many days a lazily-fetched repo track survives in the cache before pruning.
   function getCacheExpiryDays() {
     return get(KEYS.cacheExpiryDays).then(function (v) {
@@ -378,6 +392,8 @@
     setSpeedLevels: setSpeedLevels,
     getShowSegments: getShowSegments,
     setShowSegments: setShowSegments,
+    getAutoApply: getAutoApply,
+    setAutoApply: setAutoApply,
     getCacheExpiryDays: getCacheExpiryDays,
     setCacheExpiryDays: setCacheExpiryDays,
     getSources: getSources,

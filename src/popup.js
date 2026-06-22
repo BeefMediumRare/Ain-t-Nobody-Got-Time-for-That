@@ -25,6 +25,7 @@
 
   var refreshBtn = document.getElementById('refresh-repos');
   var optionsBtn = document.getElementById('open-options');
+  var autoApplyToggle = document.getElementById('auto-apply');
 
   var recording = false;
   var videoId = null;
@@ -431,6 +432,20 @@
     if (browserApi.runtime.openOptionsPage) browserApi.runtime.openOptionsPage();
   });
 
+  // Auto-apply preference. The background owns applying it on future video opens;
+  // here we just persist it, and when it's switched on we apply this video's top
+  // track right away so the popup reflects it without waiting for a reload.
+  autoApplyToggle.addEventListener('change', function () {
+    var on = autoApplyToggle.checked;
+    SpeedTrackStore.setAutoApply(on).then(function () {
+      if (on && !appliedId && currentTracks.length) {
+        applyTrack(currentTracks[0].track);
+      } else {
+        setStatus(on ? 'Auto-applying the top track when a video opens.' : 'Auto-apply off.', 'ok');
+      }
+    });
+  });
+
   refreshBtn.addEventListener('click', function () {
     setStatus('Refreshing repositories…');
     SpeedTrackSources.refreshAll().then(function (results) {
@@ -467,6 +482,7 @@
 
   SpeedTrackStore.ensureSeeded();
   SpeedTrackStore.getSpeedLevels().then(function (m) { speedLevels = m; });
+  SpeedTrackStore.getAutoApply().then(function (on) { autoApplyToggle.checked = on; });
 
   activeTab().then(function (tab) {
     if (!tab) return renderTracks();

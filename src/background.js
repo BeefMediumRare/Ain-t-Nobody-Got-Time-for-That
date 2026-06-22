@@ -22,6 +22,8 @@
   var tabVideo = {};      // tabId -> videoId reported by the content script
   var recordingTabs = {}; // tabId -> true while authoring (recording badge wins)
   var activeTabs = {};    // tabId -> true while a track is driving playback
+  var autoAppliedFor = {}; // tabId -> videoId we've already auto-applied for, so a
+                           // manual stop on the same video isn't immediately undone
 
   function setText(tabId, text) {
     action.setBadgeText({ text: text, tabId: tabId });
@@ -61,6 +63,39 @@
     });
   }
 
+  // Auto-apply: when the setting's on, drive a tab's video with its top matching
+  // track on its own — the same track the popup would list first, applied without
+  // anyone opening the popup. Reuses listTracksForVideo (storage only, same order
+  // the popup shows) and the content script's existing applyTrack message.
+  //
+  // Guards keep it from fighting the user: we skip a tab that's recording or
+  // already playing a track, and we apply at most once per (tab, video) so hitting
+  // Stop on a video isn't instantly undone. Opening a different video clears that
+  // mark (see the videoId handler), so the next one auto-applies again.
+  function maybeAutoApply(tabId) {
+    if (tabId == null || recordingTabs[tabId] || activeTabs[tabId]) return;
+    var videoId = tabVideo[tabId];
+    if (!videoId || autoAppliedFor[tabId] === videoId) return;
+    if (typeof SpeedTrackSources === 'undefined') return;
+    Promise.all([SpeedTrackStore.getAutoApply(), SpeedTrackStore.getSpeedLevels()]).then(function (arr) {
+      var on = arr[0], speedLevels = arr[1];
+      // Re-check the state we read before awaiting: the tab may have navigated,
+      // started recording, or had a track applied while the lookup was in flight.
+      if (!on || recordingTabs[tabId] || activeTabs[tabId]) return;
+      if (tabVideo[tabId] !== videoId || autoAppliedFor[tabId] === videoId) return;
+      return SpeedTrackSources.listTracksForVideo(videoId).then(function (result) {
+        if (!result.entries.length) return;
+        if (tabVideo[tabId] !== videoId || activeTabs[tabId] || recordingTabs[tabId]) return;
+        var top = result.entries[0].track;
+        var segments = SpeedTrack.trackToSegments(top, speedLevels);
+        if (!segments.length) return;
+        autoAppliedFor[tabId] = videoId; // claim it up front so a retry can't double-apply
+        return browserApi.tabs.sendMessage(tabId, { type: 'applyTrack', segments: segments, id: top.id })
+          .catch(function () { delete autoAppliedFor[tabId]; }); // page not ready; let it try again
+      });
+    }).catch(function () {});
+  }
+
   browserApi.runtime.onMessage.addListener(function (msg, sender) {
     if (!msg) return;
     var tabId = sender.tab && sender.tab.id;
@@ -76,12 +111,18 @@
       }
     } else if (msg.type === 'videoId') {
       if (tabId != null) {
+        // A different video means a fresh auto-apply is allowed again.
+        if (tabVideo[tabId] !== (msg.videoId || null)) delete autoAppliedFor[tabId];
         tabVideo[tabId] = msg.videoId || null;
         updateTrackBadge(tabId);
         // Lazily pull this video's repo tracks. Caching them writes repoTracks,
         // which trips the storage.onChanged listener below and refreshes the badge.
+        // Auto-apply once the tracks are in place (local need no fetch; repo tracks
+        // are cached by the time ensureTracksForVideo resolves).
         if (msg.videoId && typeof SpeedTrackSources !== 'undefined') {
-          SpeedTrackSources.ensureTracksForVideo(msg.videoId).catch(function () {});
+          SpeedTrackSources.ensureTracksForVideo(msg.videoId)
+            .catch(function () {})
+            .then(function () { maybeAutoApply(tabId); });
         }
       }
     } else if (msg.type === 'active') {
@@ -107,8 +148,14 @@
     var KEYS = SpeedTrackStore.KEYS;
     browserApi.storage.onChanged.addListener(function (changes, area) {
       if (area !== 'local') return;
-      if (!changes[KEYS.tracks] && !changes[KEYS.repoTracks] && !changes[KEYS.sources]) return;
-      Object.keys(tabVideo).forEach(function (id) { updateTrackBadge(Number(id)); });
+      if (changes[KEYS.tracks] || changes[KEYS.repoTracks] || changes[KEYS.sources]) {
+        Object.keys(tabVideo).forEach(function (id) { updateTrackBadge(Number(id)); });
+      }
+      // Turning auto-apply on catches up every open tab that isn't already playing
+      // a track, so it takes effect without reopening each video.
+      if (changes[KEYS.autoApply] && changes[KEYS.autoApply].newValue === true) {
+        Object.keys(tabVideo).forEach(function (id) { maybeAutoApply(Number(id)); });
+      }
     });
   }
 
@@ -124,6 +171,7 @@
       delete tabVideo[tabId];
       delete recordingTabs[tabId];
       delete activeTabs[tabId];
+      delete autoAppliedFor[tabId];
     });
   }
 })();

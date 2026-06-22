@@ -14,6 +14,7 @@
   var speed2 = document.getElementById('speed-2');
   var speed3 = document.getElementById('speed-3');
   var showSegments = document.getElementById('show-segments');
+  var autoApply = document.getElementById('auto-apply');
   var cacheExpiry = document.getElementById('cache-expiry');
   var refreshAllBtn = document.getElementById('refresh-all');
   var clearCacheBtn = document.getElementById('clear-cache');
@@ -280,6 +281,7 @@
       speed3.value = m['3'];
     });
     SpeedTrackStore.getShowSegments().then(function (on) { showSegments.checked = on; });
+    SpeedTrackStore.getAutoApply().then(function (on) { autoApply.checked = on; });
     SpeedTrackStore.getCacheExpiryDays().then(function (d) { cacheExpiry.value = d; });
   }
 
@@ -313,6 +315,15 @@
       setStatus(showSegments.checked
         ? 'Showing speed segments.'
         : 'Hiding speed segments.', 'ok');
+    });
+  });
+
+  // The background picks this up live: turning it on catches up every open video.
+  autoApply.addEventListener('change', function () {
+    SpeedTrackStore.setAutoApply(autoApply.checked).then(function () {
+      setStatus(autoApply.checked
+        ? 'Auto-applying the top track when a video opens.'
+        : 'Auto-apply off.', 'ok');
     });
   });
 
