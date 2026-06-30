@@ -14,6 +14,8 @@
 //   speedLevels  { "1":1, "2":2, ... }   — code->rate prefs (edited in Settings)
 //   showSegments boolean                 — draw the speed bands on the progress
 //                                           bar during playback (default true)
+//   showIndicator boolean                — show the current-mode indicator in the
+//                                           player's corner during playback (default true)
 //   autoApply    boolean                 — apply the top matching track on its own
 //                                           when a video opens (default false)
 //   cacheExpiryDays number               — prune fetched repo tracks older than
@@ -38,6 +40,7 @@
     repoTracks: 'speedTrack.repoTracks',
     speedLevels: 'speedTrack.speedLevels',
     showSegments: 'speedTrack.showSegments',
+    showIndicator: 'speedTrack.showIndicator',
     autoApply: 'speedTrack.autoApply',
     cacheExpiryDays: 'speedTrack.cacheExpiryDays',
     sources: 'speedTrack.sources'
@@ -295,6 +298,16 @@
     return set(KEYS.showSegments, !!on);
   }
 
+  // Whether playback shows the current-mode indicator in the player's corner.
+  // Defaults on; only an explicit false hides it.
+  function getShowIndicator() {
+    return get(KEYS.showIndicator).then(function (v) { return v !== false; });
+  }
+
+  function setShowIndicator(on) {
+    return set(KEYS.showIndicator, !!on);
+  }
+
   // Whether opening a video applies its top matching track on its own (the
   // background does it; no popup needed). Off unless explicitly turned on, since
   // it changes playback speed without being asked.
@@ -392,6 +405,8 @@
     setSpeedLevels: setSpeedLevels,
     getShowSegments: getShowSegments,
     setShowSegments: setShowSegments,
+    getShowIndicator: getShowIndicator,
+    setShowIndicator: setShowIndicator,
     getAutoApply: getAutoApply,
     setAutoApply: setAutoApply,
     getCacheExpiryDays: getCacheExpiryDays,

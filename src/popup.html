@@ -35,6 +35,58 @@
     <div id="source-notices" class="muted"></div>
   </div>
 
+  <!-- Speed editor: the three adjustable modes as gauges on one row, named and keyed
+       by their ramp dot (blue normal, green fast, amber faster, matching the strips).
+       Skip (4) is left out, since it seeks past a section rather than playing at a
+       rate. Editing re-renders the time-saved figures above. -->
+  <div class="section speeds">
+    <h2>Speeds</h2>
+    <div class="speeds-grid">
+      <div class="speed-cell">
+        <span class="speed-cell-head">
+          <span class="speed-dot" data-code="1" aria-hidden="true"></span>
+          <label class="speed-name" for="pop-speed-1">Normal</label>
+        </span>
+        <span class="speed-cell-value">
+          <input id="pop-speed-1" type="number" min="0.1" step="0.05" inputmode="decimal" aria-label="Normal speed">
+          <span class="speed-suffix">×</span>
+          <span class="speed-step">
+            <button type="button" class="speed-step-btn" data-target="pop-speed-1" data-dir="up" tabindex="-1" aria-label="Increase normal speed">+</button>
+            <button type="button" class="speed-step-btn" data-target="pop-speed-1" data-dir="down" tabindex="-1" aria-label="Decrease normal speed">−</button>
+          </span>
+        </span>
+      </div>
+      <div class="speed-cell">
+        <span class="speed-cell-head">
+          <span class="speed-dot" data-code="2" aria-hidden="true"></span>
+          <label class="speed-name" for="pop-speed-2">Fast</label>
+        </span>
+        <span class="speed-cell-value">
+          <input id="pop-speed-2" type="number" min="0.1" step="0.05" inputmode="decimal" aria-label="Fast speed">
+          <span class="speed-suffix">×</span>
+          <span class="speed-step">
+            <button type="button" class="speed-step-btn" data-target="pop-speed-2" data-dir="up" tabindex="-1" aria-label="Increase fast speed">+</button>
+            <button type="button" class="speed-step-btn" data-target="pop-speed-2" data-dir="down" tabindex="-1" aria-label="Decrease fast speed">−</button>
+          </span>
+        </span>
+      </div>
+      <div class="speed-cell">
+        <span class="speed-cell-head">
+          <span class="speed-dot" data-code="3" aria-hidden="true"></span>
+          <label class="speed-name" for="pop-speed-3">Faster</label>
+        </span>
+        <span class="speed-cell-value">
+          <input id="pop-speed-3" type="number" min="0.1" step="0.05" inputmode="decimal" aria-label="Faster speed">
+          <span class="speed-suffix">×</span>
+          <span class="speed-step">
+            <button type="button" class="speed-step-btn" data-target="pop-speed-3" data-dir="up" tabindex="-1" aria-label="Increase faster speed">+</button>
+            <button type="button" class="speed-step-btn" data-target="pop-speed-3" data-dir="down" tabindex="-1" aria-label="Decrease faster speed">−</button>
+          </span>
+        </span>
+      </div>
+    </div>
+  </div>
+
   <div id="status" class="status"></div>
 
   <!-- Compact footer: version, repo refresh (when repos exist), and settings. -->

@@ -27,6 +27,12 @@
   var optionsBtn = document.getElementById('open-options');
   var autoApplyToggle = document.getElementById('auto-apply');
 
+  var speedInputs = {
+    1: document.getElementById('pop-speed-1'),
+    2: document.getElementById('pop-speed-2'),
+    3: document.getElementById('pop-speed-3')
+  };
+
   var recording = false;
   var videoId = null;
   var speedLevels = null;     // code->rate prefs, loaded once on open
@@ -511,6 +517,54 @@
     show(refreshBtn, sources.some(function (s) { return s.type === 'github'; }));
   });
 
+  // ---- Speeds ---------------------------------------------------------------
+  //
+  // Edits the global speed map right where you're watching. Codes 1-3 are the
+  // adjustable rates; Skip (4) isn't a rate, so it's carried through untouched.
+  // Saving is instant (like Settings) and re-renders the tracks, so their
+  // time-saved figures reflect the new speeds straight away.
+
+  // Fill the inputs from the loaded speeds.
+  function syncSpeedEditor() {
+    if (!speedLevels) return;
+    [1, 2, 3].forEach(function (code) {
+      if (speedLevels[code] != null) speedInputs[code].value = speedLevels[code];
+    });
+  }
+
+  function saveSpeeds() {
+    var vals = [speedInputs[1].value, speedInputs[2].value, speedInputs[3].value].map(parseFloat);
+    if (!vals.every(function (v) { return v > 0; })) {
+      setStatus('Speeds must be positive numbers.', 'error');
+      return;
+    }
+    // Skip (code 4) has no input here; carry its stored rate through unchanged.
+    var skip = (speedLevels && speedLevels['4'] != null) ? speedLevels['4'] : 10;
+    var map = { '1': vals[0], '2': vals[1], '3': vals[2], '4': skip };
+    SpeedTrackStore.setSpeedLevels(map).then(function () {
+      speedLevels = map;
+      renderTracks(); // the time-saved figures recompute at the new speeds
+    }).catch(function (err) {
+      setStatus("Couldn't save speeds: " + err.message, 'error');
+    });
+  }
+
+  // 'change' (not 'input') fires on blur/enter/step, so we don't write mid-edit.
+  [1, 2, 3].forEach(function (code) {
+    speedInputs[code].addEventListener('change', saveSpeeds);
+  });
+
+  // The +/- steppers (mouse affordance for the spinner-less inputs). stepUp/stepDown
+  // honor the input's min/step; a 'change' event then runs the same save path.
+  Array.prototype.forEach.call(document.querySelectorAll('.speed-step-btn'), function (btn) {
+    btn.addEventListener('click', function () {
+      var input = document.getElementById(btn.getAttribute('data-target'));
+      if (!input) return;
+      if (btn.getAttribute('data-dir') === 'up') input.stepUp(); else input.stepDown();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
   // ---- Init -----------------------------------------------------------------
 
   var versionEl = document.getElementById('version');
@@ -524,6 +578,7 @@
   // first and this is a no-op.
   SpeedTrackStore.getSpeedLevels().then(function (m) {
     speedLevels = m;
+    syncSpeedEditor();
     if (currentTracks.length) renderTracks();
   });
   SpeedTrackStore.getAutoApply().then(function (on) { autoApplyToggle.checked = on; });

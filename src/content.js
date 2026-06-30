@@ -14,6 +14,7 @@
   var running = false; // rAF loop active?
   var appliedId = null; // id of the track currently driving playback (for the popup's marker)
   var showSegments = true; // draw the colored speed bands? (Settings preference)
+  var showIndicator = true; // show the current-mode indicator? (Settings preference)
 
   var browserApi = (typeof browser !== 'undefined') ? browser : (typeof chrome !== 'undefined' ? chrome : null);
 
@@ -72,6 +73,15 @@
           video.playbackRate = seg.rate;
         }
       }
+      // The indicator tracks the mode at the playhead independently of the pause
+      // guard above, so it stays visible while paused — it reports the active
+      // mode, not whether we're currently driving. Hidden only before the first
+      // cue, where the track isn't doing anything yet.
+      if (showIndicator && window.SpeedTrackTimeline) {
+        var modeIdx = activeIndexAt(video.currentTime);
+        if (modeIdx >= 0) window.SpeedTrackTimeline.setMode(segments[modeIdx].code, segments[modeIdx].rate);
+        else window.SpeedTrackTimeline.hideMode();
+      }
       // Keep the bands on the bar; cheap no-op unless YouTube re-rendered it.
       if (showSegments && window.SpeedTrackTimeline) window.SpeedTrackTimeline.refreshSegments(segments);
     }
@@ -91,7 +101,10 @@
     appliedId = null;
     var video = getVideo();
     if (video) video.playbackRate = 1;
-    if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+    if (window.SpeedTrackTimeline) {
+      window.SpeedTrackTimeline.clear();
+      window.SpeedTrackTimeline.hideMode();
+    }
     reportActive(false);
   }
 
@@ -130,7 +143,10 @@
       // over to the new video. Undo it (but only one we actually set).
       var video = getVideo();
       if (hadTrack && video) video.playbackRate = 1;
-      if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
+      if (window.SpeedTrackTimeline) {
+        window.SpeedTrackTimeline.clear();
+        window.SpeedTrackTimeline.hideMode();
+      }
       if (hadTrack) reportActive(false);
     }
     reportVideoId(newId);
@@ -186,15 +202,46 @@
       showSegments = on;
       if (!on && window.SpeedTrackTimeline) window.SpeedTrackTimeline.clear();
     });
+    SpeedTrackStore.getShowIndicator().then(function (on) {
+      showIndicator = on;
+      if (!on && window.SpeedTrackTimeline) window.SpeedTrackTimeline.hideMode();
+    });
   }
   if (browserApi && browserApi.storage && browserApi.storage.onChanged) {
     var SHOW_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.showSegments : 'speedTrack.showSegments';
+    var INDICATOR_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.showIndicator : 'speedTrack.showIndicator';
+    var SPEED_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.speedLevels : 'speedTrack.speedLevels';
     browserApi.storage.onChanged.addListener(function (changes, area) {
-      if (area !== 'local' || !changes[SHOW_KEY]) return;
-      showSegments = changes[SHOW_KEY].newValue !== false;
-      if (!window.SpeedTrackTimeline || window.__speedTrackRecording) return;
-      if (showSegments) window.SpeedTrackTimeline.renderSegments(segments);
-      else window.SpeedTrackTimeline.clear();
+      if (area !== 'local') return;
+      if (changes[SHOW_KEY]) {
+        showSegments = changes[SHOW_KEY].newValue !== false;
+        if (window.SpeedTrackTimeline && !window.__speedTrackRecording) {
+          if (showSegments) window.SpeedTrackTimeline.renderSegments(segments);
+          else window.SpeedTrackTimeline.clear();
+        }
+      }
+      if (changes[INDICATOR_KEY]) {
+        showIndicator = changes[INDICATOR_KEY].newValue !== false;
+        // Turning it off hides it now; turning it on lets the rAF loop redraw it.
+        if (!showIndicator && window.SpeedTrackTimeline) window.SpeedTrackTimeline.hideMode();
+      }
+      // Speeds changed in Settings: re-resolve the playing track's rates from its
+      // codes so playback, the bands, and the indicator all reflect the new speeds
+      // right away — otherwise the active segments keep the rates they were applied
+      // with. The rAF loop picks up the new rates (and indicator label) next frame.
+      if (changes[SPEED_KEY] && segments.length) {
+        var map = changes[SPEED_KEY].newValue ||
+                  (typeof SpeedTrack !== 'undefined' ? SpeedTrack.SPEED_LEVELS : null);
+        if (map) {
+          for (var s = 0; s < segments.length; s++) {
+            var seg = segments[s];
+            if (seg.code != null && map[seg.code] != null) seg.rate = map[seg.code];
+          }
+          if (showSegments && window.SpeedTrackTimeline && !window.__speedTrackRecording) {
+            window.SpeedTrackTimeline.renderSegments(segments);
+          }
+        }
+      }
     });
   }
 

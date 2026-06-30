@@ -237,3 +237,6 @@ $RECYCLE.BIN/
 
 # web-ext build output
 web-ext-artifacts/
+
+# playwright-cli session cache (screenshots/snapshots from local testing)
+.playwright-cli/

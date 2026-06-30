@@ -20,6 +20,12 @@
   var PIN_STYLE_ID = 'speed-track-pin-style';
   var PIN_CLASS = 'speed-track-pin';
 
+  var INDICATOR_ID = 'speed-track-mode-indicator';
+  var INDICATOR_STYLE_ID = 'speed-track-mode-indicator-style';
+
+  // Speed code that means "skip", mirrored from content.js / parser.js (4 = skip).
+  var SKIP_CODE = 4;
+
   // code -> band color (1 normal, 2 fast, 3 faster, 4 skip), from the shared speed
   // ramp so the bands, the toolbar badge, and the popup's strip stay in step. The
   // ramp runs cool -> hot, so the timeline reads as a velocity scale at a glance.
@@ -159,12 +165,107 @@
     if (player) player.classList.remove(PIN_CLASS);
   }
 
+  // ---- Current-mode indicator -----------------------------------------------
+  //
+  // A small pill in the player's top-right corner showing the cue mode in effect
+  // right now: a dot in the speed-ramp color plus its rate ("1.5x", "Skip"). It
+  // stays put through playback (it doesn't fade with YouTube's chrome) so the
+  // current speed is always one glance away. Driven by content.js's rAF loop:
+  // setMode(code, rate) every frame (a cheap no-op unless the mode actually
+  // changed), hideMode() when nothing is driving playback.
+
+  function ensureIndicatorStyle() {
+    if (document.getElementById(INDICATOR_STYLE_ID)) return;
+    var style = document.createElement('style');
+    style.id = INDICATOR_STYLE_ID;
+    style.textContent = [
+      '#' + INDICATOR_ID + '{',
+        'position:absolute;top:12px;right:12px;z-index:60;',
+        'display:flex;align-items:center;gap:7px;box-sizing:border-box;',
+        'padding:5px 11px 5px 9px;border-radius:999px;',
+        'font-family:"Roboto","YouTube Noto",Arial,sans-serif;',
+        'font-size:12px;font-weight:500;line-height:1;color:#fff;',
+        'background:rgba(15,17,21,0.4);',
+        'backdrop-filter:blur(8px) saturate(140%);',
+        '-webkit-backdrop-filter:blur(8px) saturate(140%);',
+        'border:1px solid rgba(255,255,255,0.14);',
+        'box-shadow:0 2px 10px rgba(0,0,0,0.35);',
+        'pointer-events:none;user-select:none;',
+        // Stay put: !important defeats YouTube's .ytp-autohide opacity fade, which
+        // otherwise dims the player's overlays when the controls hide while idle.
+        'opacity:1 !important;',
+      '}',
+      // Bigger margin in fullscreen so it doesn't hug the very edge of the screen.
+      '.ytp-fullscreen #' + INDICATOR_ID + '{top:24px;right:24px;font-size:14px;}',
+      '#' + INDICATOR_ID + ' .stk-mode-dot{',
+        'width:9px;height:9px;border-radius:50%;flex:0 0 auto;',
+        'background:var(--stk-mode,#3b82f6);',
+        'box-shadow:0 0 0 1px rgba(0,0,0,0.5),0 0 7px var(--stk-mode,#3b82f6);',
+        'transition:background .2s ease,box-shadow .2s ease;',
+      '}',
+      '#' + INDICATOR_ID + '.stk-pop .stk-mode-dot{animation:stk-mode-pop .35s ease;}',
+      '#' + INDICATOR_ID + ' .stk-mode-label{font-variant-numeric:tabular-nums;letter-spacing:.02em;}',
+      '@keyframes stk-mode-pop{0%{transform:scale(1);}40%{transform:scale(1.5);}100%{transform:scale(1);}}',
+      '@media (prefers-reduced-motion:reduce){#' + INDICATOR_ID + '.stk-pop .stk-mode-dot{animation:none;}}'
+    ].join('');
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // The pill, lazily (re)created inside the player. Returns null if the player
+  // isn't in the DOM yet. Re-attaches if YouTube re-rendered the player subtree.
+  function ensureIndicator() {
+    var player = document.querySelector('.html5-video-player');
+    if (!player) return null;
+    var el = document.getElementById(INDICATOR_ID);
+    if (el && el.isConnected && el.parentNode === player) return el;
+    ensureIndicatorStyle();
+    el = document.createElement('div');
+    el.id = INDICATOR_ID;
+    var dot = document.createElement('span');
+    dot.className = 'stk-mode-dot';
+    var label = document.createElement('span');
+    label.className = 'stk-mode-label';
+    el.appendChild(dot);
+    el.appendChild(label);
+    player.appendChild(el);
+    return el;
+  }
+
+  var lastMode = null; // key of the displayed mode, to skip redundant per-frame work
+
+  function setMode(code, rate) {
+    var isSkip = (code != null) ? code === SKIP_CODE : rate >= 10;
+    var color = (code != null) ? codeColor(code) : rateColor(rate);
+    var text = isSkip ? 'Skip' : (rate + 'x');
+    var key = text + '|' + color;
+    var el = ensureIndicator();
+    if (!el) { lastMode = null; return; }
+    if (key === lastMode && el.querySelector('.stk-mode-label').textContent === text) return;
+    lastMode = key;
+    var dot = el.querySelector('.stk-mode-dot');
+    dot.style.setProperty('--stk-mode', color);
+    el.querySelector('.stk-mode-label').textContent = text;
+    // Restart the pop: pull the class, force a reflow, re-add — so the dot ticks
+    // every time the mode changes, not just the first.
+    el.classList.remove('stk-pop');
+    void el.offsetWidth;
+    el.classList.add('stk-pop');
+  }
+
+  function hideMode() {
+    var el = document.getElementById(INDICATOR_ID);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    lastMode = null;
+  }
+
   window.SpeedTrackTimeline = {
     render: render,
     renderSegments: renderSegments,
     refreshSegments: refreshSegments,
     clear: clear,
     pin: pin,
-    unpin: unpin
+    unpin: unpin,
+    setMode: setMode,
+    hideMode: hideMode
   };
 })();

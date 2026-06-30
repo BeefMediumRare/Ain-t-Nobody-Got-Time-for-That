@@ -185,6 +185,156 @@ input:focus { outline: none; border-color: var(--accent); }
   outline-offset: 2px;
 }
 
+/* Speed-mode atoms, shared with the Settings page (which loads this stylesheet):
+   a ramp-colored dot, a fixed-width label, the value, then the unit. The dot ties
+   each mode to its band on the timeline and the per-track strip. */
+.speed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.speed-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.speed-dot[data-code="1"] { background: var(--speed-1); }
+.speed-dot[data-code="2"] { background: var(--speed-2); }
+.speed-dot[data-code="3"] { background: var(--speed-3); }
+.speed-dot[data-code="4"] { background: var(--speed-4); }
+
+.speed-row label {
+  width: 52px;
+  flex: none;
+  font-size: 13px;
+}
+
+.speed-row input {
+  width: 56px;
+  flex: none;
+}
+
+.speed-suffix {
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+
+/* The popup's speed editor: the three adjustable modes as gauges on one row. Each
+   is a small card — a named, dot-keyed header over a large mono readout — so the
+   value has room to breathe and it's plain which mode you're setting. */
+.speeds-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.speed-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0; /* let the 1fr track shrink past the number input's intrinsic width */
+  padding: 7px 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: text;
+}
+
+.speed-cell:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.speed-cell-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.speed-cell-head .speed-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.speed-cell-value {
+  display: flex;
+  align-items: center;
+}
+
+/* The number takes the slack and right-aligns, so it hugs the unit whatever its
+   length (1× … 1.75×), with the stepper pinned to the right edge. The native
+   spinners are stripped here (the custom stepper replaces them) so the arrows don't
+   steal the width the digits need; arrow keys still step. The Settings page keeps
+   its native spinners — its inputs are wide enough for both. */
+.speed-cell-value input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.speed-cell-value input::-webkit-outer-spin-button,
+.speed-cell-value input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.speed-cell-value input:focus {
+  outline: none;
+}
+
+.speed-cell-value .speed-suffix {
+  margin: 0 4px 0 2px;
+  font-size: 13px;
+}
+
+/* Mouse stepper: stacked +/- to nudge the value, replacing the spinners we stripped.
+   Keyboard users step with the arrow keys (still native on the input), so these stay
+   out of the tab order. */
+.speed-step {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+
+.speed-step .speed-step-btn {
+  margin: 0;
+  width: 17px;
+  height: 11px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.speed-step .speed-step-btn:first-child { border-radius: 4px 4px 0 0; }
+.speed-step .speed-step-btn:last-child { border-radius: 0 0 4px 4px; border-top: none; }
+.speed-step .speed-step-btn:hover { background: var(--border-strong); color: var(--text); }
+.speed-step .speed-step-btn:active { background: var(--accent); color: var(--on-accent); }
+
 button {
   margin-top: 8px;
   width: 100%;

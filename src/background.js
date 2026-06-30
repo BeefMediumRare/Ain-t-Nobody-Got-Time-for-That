@@ -111,8 +111,13 @@
       }
     } else if (msg.type === 'videoId') {
       if (tabId != null) {
-        // A different video means a fresh auto-apply is allowed again.
-        if (tabVideo[tabId] !== (msg.videoId || null)) delete autoAppliedFor[tabId];
+        // A videoId report always comes from a freshly (re)loaded content script,
+        // which has no track applied yet — so any earlier auto-apply for this tab
+        // no longer holds. Clearing the mark unconditionally lets this load apply
+        // again, including a plain page reload of the same video (where the id
+        // doesn't change). The content script only reports on load and on an actual
+        // video switch, so this never undoes a track that's currently driving.
+        delete autoAppliedFor[tabId];
         tabVideo[tabId] = msg.videoId || null;
         updateTrackBadge(tabId);
         // Lazily pull this video's repo tracks. Caching them writes repoTracks,
