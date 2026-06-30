@@ -15,6 +15,7 @@
   var speed3 = document.getElementById('speed-3');
   var showSegments = document.getElementById('show-segments');
   var showIndicator = document.getElementById('show-indicator');
+  var flashTransitions = document.getElementById('flash-transitions');
   var autoApply = document.getElementById('auto-apply');
   var cacheExpiry = document.getElementById('cache-expiry');
   var refreshAllBtn = document.getElementById('refresh-all');
@@ -283,6 +284,7 @@
     });
     SpeedTrackStore.getShowSegments().then(function (on) { showSegments.checked = on; });
     SpeedTrackStore.getShowIndicator().then(function (on) { showIndicator.checked = on; });
+    SpeedTrackStore.getFlashTransitions().then(function (on) { flashTransitions.checked = on; });
     SpeedTrackStore.getAutoApply().then(function (on) { autoApply.checked = on; });
     SpeedTrackStore.getCacheExpiryDays().then(function (d) { cacheExpiry.value = d; });
   }
@@ -326,6 +328,15 @@
       setStatus(showIndicator.checked
         ? 'Showing the current mode in the player.'
         : 'Hiding the mode indicator.', 'ok');
+    });
+  });
+
+  // The content script picks this up live via storage.onChanged.
+  flashTransitions.addEventListener('change', function () {
+    SpeedTrackStore.setFlashTransitions(flashTransitions.checked).then(function () {
+      setStatus(flashTransitions.checked
+        ? 'Flashing the edges on a speed change.'
+        : 'Edge flash off.', 'ok');
     });
   });
 

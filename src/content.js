@@ -206,10 +206,14 @@
       showIndicator = on;
       if (!on && window.SpeedTrackTimeline) window.SpeedTrackTimeline.hideMode();
     });
+    SpeedTrackStore.getFlashTransitions().then(function (on) {
+      if (window.SpeedTrackTimeline) window.SpeedTrackTimeline.setFlashEnabled(on);
+    });
   }
   if (browserApi && browserApi.storage && browserApi.storage.onChanged) {
     var SHOW_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.showSegments : 'speedTrack.showSegments';
     var INDICATOR_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.showIndicator : 'speedTrack.showIndicator';
+    var FLASH_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.flashTransitions : 'speedTrack.flashTransitions';
     var SPEED_KEY = (typeof SpeedTrackStore !== 'undefined') ? SpeedTrackStore.KEYS.speedLevels : 'speedTrack.speedLevels';
     browserApi.storage.onChanged.addListener(function (changes, area) {
       if (area !== 'local') return;
@@ -224,6 +228,9 @@
         showIndicator = changes[INDICATOR_KEY].newValue !== false;
         // Turning it off hides it now; turning it on lets the rAF loop redraw it.
         if (!showIndicator && window.SpeedTrackTimeline) window.SpeedTrackTimeline.hideMode();
+      }
+      if (changes[FLASH_KEY] && window.SpeedTrackTimeline) {
+        window.SpeedTrackTimeline.setFlashEnabled(changes[FLASH_KEY].newValue === true);
       }
       // Speeds changed in Settings: re-resolve the playing track's rates from its
       // codes so playback, the bands, and the indicator all reflect the new speeds

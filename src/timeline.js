@@ -22,6 +22,7 @@
 
   var INDICATOR_ID = 'speed-track-mode-indicator';
   var INDICATOR_STYLE_ID = 'speed-track-mode-indicator-style';
+  var FLASH_ID = 'speed-track-mode-flash';
 
   // Speed code that means "skip", mirrored from content.js / parser.js (4 = skip).
   var SKIP_CODE = 4;
@@ -206,7 +207,19 @@
       '#' + INDICATOR_ID + '.stk-pop .stk-mode-dot{animation:stk-mode-pop .35s ease;}',
       '#' + INDICATOR_ID + ' .stk-mode-label{font-variant-numeric:tabular-nums;letter-spacing:.02em;}',
       '@keyframes stk-mode-pop{0%{transform:scale(1);}40%{transform:scale(1.5);}100%{transform:scale(1);}}',
-      '@media (prefers-reduced-motion:reduce){#' + INDICATOR_ID + '.stk-pop .stk-mode-dot{animation:none;}}'
+      // Edge bloom: a rim glow in the mode color around all four edges that blooms
+      // and fades, leaving the center clear — a peripheral cue the corner dot can't
+      // be. The inset shadow itself (blur/spread/color) and the peak opacity are set
+      // per change, so a faster mode lands a brighter, thicker kick.
+      '#' + FLASH_ID + '{',
+        'position:absolute;inset:0;z-index:59;pointer-events:none;opacity:0;border-radius:inherit;',
+      '}',
+      '#' + FLASH_ID + '.run{animation:stk-flash var(--stk-dur,560ms) ease-out;}',
+      '#' + FLASH_ID + '.run.skip{animation:stk-flash-skip var(--stk-dur,520ms) ease-out;}',
+      '@keyframes stk-flash{0%{opacity:0;}12%{opacity:var(--stk-peak,.4);}100%{opacity:0;}}',
+      // Skip is a jump, so it gets a sharper double-pulse rather than a single bloom.
+      '@keyframes stk-flash-skip{0%{opacity:0;}9%{opacity:var(--stk-peak,.6);}26%{opacity:.08;}42%{opacity:calc(var(--stk-peak,.6)*.85);}100%{opacity:0;}}',
+      '@media (prefers-reduced-motion:reduce){#' + INDICATOR_ID + '.stk-pop .stk-mode-dot{animation:none;}#' + FLASH_ID + '.run,#' + FLASH_ID + '.run.skip{animation:none;}}'
     ].join('');
     (document.head || document.documentElement).appendChild(style);
   }
@@ -231,7 +244,50 @@
     return el;
   }
 
-  var lastMode = null; // key of the displayed mode, to skip redundant per-frame work
+  // The full-player bloom layer, lazily (re)created inside the player.
+  function ensureFlash() {
+    var player = document.querySelector('.html5-video-player');
+    if (!player) return null;
+    var el = document.getElementById(FLASH_ID);
+    if (el && el.isConnected && el.parentNode === player) return el;
+    ensureIndicatorStyle();
+    el = document.createElement('div');
+    el.id = FLASH_ID;
+    player.appendChild(el);
+    return el;
+  }
+
+  // Fire the edge bloom for a transition. The faster the mode, the brighter the kick
+  // and the further the glow reaches in; skip gets the sharper double-pulse keyframe.
+  function flashMode(rate, color, isSkip) {
+    var el = ensureFlash();
+    if (!el) return;
+    var peak, blur, spread, dur;
+    if (isSkip) {
+      peak = 0.75; blur = 95; spread = 16; dur = 520;
+    } else {
+      var r = (typeof rate === 'number' && rate > 0) ? rate : 1;
+      peak = Math.min(0.62, 0.30 + (r - 1) * 0.16);
+      blur = 50 + (r - 1) * 16;
+      spread = 4 + (r - 1) * 5;
+      dur = 540 + Math.min(120, (r - 1) * 40);
+    }
+    el.style.boxShadow = 'inset 0 0 ' + Math.round(blur) + 'px ' + Math.round(spread) + 'px ' + color;
+    el.style.setProperty('--stk-peak', peak.toFixed(3));
+    el.style.setProperty('--stk-dur', Math.round(dur) + 'ms');
+    // Restart the animation: drop the classes, force a reflow, re-add.
+    el.classList.remove('run', 'skip');
+    void el.offsetWidth;
+    el.classList.add('run');
+    if (isSkip) el.classList.add('skip');
+  }
+
+  var lastMode = null;     // key of the displayed mode, to skip redundant per-frame work
+  var flashEnabled = false; // edge bloom on a transition? (Settings preference, off by default)
+
+  function setFlashEnabled(on) {
+    flashEnabled = !!on;
+  }
 
   function setMode(code, rate) {
     var isSkip = (code != null) ? code === SKIP_CODE : rate >= 10;
@@ -250,11 +306,15 @@
     el.classList.remove('stk-pop');
     void el.offsetWidth;
     el.classList.add('stk-pop');
+    // ...and bloom the edges for the transition, if that's turned on.
+    if (flashEnabled) flashMode(rate, color, isSkip);
   }
 
   function hideMode() {
-    var el = document.getElementById(INDICATOR_ID);
-    if (el && el.parentNode) el.parentNode.removeChild(el);
+    [INDICATOR_ID, FLASH_ID].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
     lastMode = null;
   }
 
@@ -266,6 +326,7 @@
     pin: pin,
     unpin: unpin,
     setMode: setMode,
-    hideMode: hideMode
+    hideMode: hideMode,
+    setFlashEnabled: setFlashEnabled
   };
 })();

@@ -16,6 +16,8 @@
 //                                           bar during playback (default true)
 //   showIndicator boolean                — show the current-mode indicator in the
 //                                           player's corner during playback (default true)
+//   flashTransitions boolean             — bloom the player edges in the mode color on
+//                                           a speed change (default false)
 //   autoApply    boolean                 — apply the top matching track on its own
 //                                           when a video opens (default false)
 //   cacheExpiryDays number               — prune fetched repo tracks older than
@@ -41,6 +43,7 @@
     speedLevels: 'speedTrack.speedLevels',
     showSegments: 'speedTrack.showSegments',
     showIndicator: 'speedTrack.showIndicator',
+    flashTransitions: 'speedTrack.flashTransitions',
     autoApply: 'speedTrack.autoApply',
     cacheExpiryDays: 'speedTrack.cacheExpiryDays',
     sources: 'speedTrack.sources'
@@ -308,6 +311,16 @@
     return set(KEYS.showIndicator, !!on);
   }
 
+  // Whether a speed change blooms the player edges in the mode color. Off unless
+  // explicitly turned on.
+  function getFlashTransitions() {
+    return get(KEYS.flashTransitions).then(function (v) { return v === true; });
+  }
+
+  function setFlashTransitions(on) {
+    return set(KEYS.flashTransitions, !!on);
+  }
+
   // Whether opening a video applies its top matching track on its own (the
   // background does it; no popup needed). Off unless explicitly turned on, since
   // it changes playback speed without being asked.
@@ -407,6 +420,8 @@
     setShowSegments: setShowSegments,
     getShowIndicator: getShowIndicator,
     setShowIndicator: setShowIndicator,
+    getFlashTransitions: getFlashTransitions,
+    setFlashTransitions: setFlashTransitions,
     getAutoApply: getAutoApply,
     setAutoApply: setAutoApply,
     getCacheExpiryDays: getCacheExpiryDays,
